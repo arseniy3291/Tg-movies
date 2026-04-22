@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+  <meta name="theme-color" content="#0d0d14"/>
+  <meta name="description" content="CineGram — ваш личный кинотеатр. Смотрите лучшие фильмы и сериалы в премиальном качестве."/>
+  <meta name="keywords" content="фильмы, сериалы, смотреть онлайн, кино, cinegram, кинограм"/>
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="CineGram — Кино. Сериалы. Стриминг."/>
+  <meta property="og:description" content="Смотрите любимый контент в Noble Midnight стиле. Премиальный плеер без рекламы."/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:image" content="/assets/og-preview.png"/>
+  
+  <base href="/"/>
+  <title>CineGram</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  
+  <link rel="stylesheet" href="/main.v11.css"/>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+
+<!-- ════ ГЛАВНАЯ ════════════════════════════════════════════════ -->
+<div id="screen-home" class="screen active">
+
+  <!-- Шапка -->
+  <header class="header" id="main-header">
+    <div class="header-logo">
+      <span class="logo-mark">C</span>
+      <span class="logo-name">CineGram</span>
+    </div>
+    <div class="header-actions" style="display: flex; gap: 16px; align-items: center;">
+      <button id="btn-search-open" class="hdr-icon-btn hdr-search-btn" aria-label="Поиск">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Поисковый оверлей -->
+  <div id="search-overlay" class="search-overlay hidden">
+    <div class="search-panel">
+      <div class="search-field-modern">
+        <button id="btn-search-trigger" class="s-action-btn s-accent-red" aria-label="Найти">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        </button>
+        <input id="search-input" type="text" placeholder="Поиск…" autocomplete="off"/>
+        <div class="search-field-actions">
+          <button id="btn-search-settings" class="s-action-btn s-accent-red" aria-label="Фильтры">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+          </button>
+          <button id="btn-search-close-top" class="s-action-btn s-accent-red" aria-label="Закрыть">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Панель фильтров -->
+      <div id="search-filters" class="search-filters-panel hidden">
+        <div class="filter-section">
+          <div class="filter-label">Жанры</div>
+          <div class="filter-chips" id="filter-genres">
+            <button class="f-chip" data-genre="11">Боевик</button>
+            <button class="f-chip" data-genre="13">Комедия</button>
+            <button class="f-chip" data-genre="2">Драма</button>
+            <button class="f-chip" data-genre="17">Ужасы</button>
+            <button class="f-chip" data-genre="6">Фантастика</button>
+            <button class="f-chip" data-genre="1">Триллер</button>
+            <button class="f-chip" data-genre="18">Мультфильм</button>
+          </div>
+        </div>
+        <div class="filter-section">
+          <div class="filter-header-row">
+            <div class="filter-label">Год выпуска</div>
+            <div id="year-range-display" class="year-display">1960 — 2024</div>
+          </div>
+          <div class="range-slider-container">
+            <div class="range-track"></div>
+            <div id="range-mask" class="range-mask"></div>
+            <input type="range" id="year-min" min="1940" max="2024" value="1960" class="input-range">
+            <input type="range" id="year-max" min="1940" max="2024" value="2024" class="input-range">
+          </div>
+        </div>
+        <button id="btn-filter-reset" class="filter-reset-btn">Сбросить все</button>
+      </div>
+
+      <div id="search-results-viewport" class="search-results-viewport hidden">
+        <div id="search-results" class="search-list"></div>
+        
+        <div id="search-empty" class="empty-hint hidden">
+          <div class="empty-icon">🎬</div>
+          <p>Ничего не найдено</p>
+        </div>
+        
+        <div id="search-loader" class="s-loader hidden"><div class="spin"></div></div>
+
+        <button id="btn-search-all" class="search-show-all hidden">Показать все</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Прокручиваемый контент -->
+  <main class="home-scroll">
+
+    <!-- CineGram ASCII Banner (inline) -->
+    <section id="hero" class="hero-banner">
+      <canvas id="ascii-canvas"></canvas>
+      <div class="hero-banner-content">
+        <div class="hero-top">
+          <span class="hero-mini-name">CineGram Premium</span>
+        </div>
+
+        <div class="hero-center">
+          <h2 class="splash-title">CineGram</h2>
+          <p class="splash-subtitle">Кино. Сериалы. Стриминг.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Вкладки -->
+    <div class="tabs-row">
+      <button class="tab active" data-type="films">Фильмы</button>
+      <button class="tab" data-type="series">Сериалы</button>
+      <button class="tab" data-type="cartoons">Мультфильмы</button>
+    </div>
+
+    <!-- Продолжить просмотр -->
+    <section id="section-history" class="carousel-section hidden">
+      <div class="section-hdr">
+        <span class="section-title">Продолжить просмотр</span>
+      </div>
+      <div id="history-row" class="carousel-row"></div>
+    </section>
+
+    <!-- Стриминговые Сервисы -->
+    <section class="carousel-section">
+      <div class="section-hdr">
+        <span class="section-title">Стриминги</span>
+      </div>
+      <div id="services-row" class="carousel-row services-row"></div>
+    </section>
+
+    <!-- Жанры -->
+    <section class="carousel-section">
+      <div class="section-hdr">
+        <span class="section-title">Жанры</span>
+      </div>
+      <div id="genres-row" class="carousel-row chips-row"></div>
+    </section>
+
+    <!-- Новинки -->
+    <section class="carousel-section">
+      <div class="section-hdr">
+        <span class="section-title">Популярное</span>
+      </div>
+      <div id="popular-grid" class="card-grid"></div>
+    </section>
+
+  </main>
+
+</div>
+
+<!-- ════ ДЕТАЛИ ФИЛЬМА ══════════════════════════════════════════ -->
+<div id="screen-movie" class="screen hidden">
+  <div id="movie-bg" class="movie-backdrop"></div>
+
+  <div class="movie-page-scroll">
+
+    <div class="movie-top-bar">
+      <button id="btn-back" class="back-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    </div>
+
+    <div class="movie-cover-row">
+      <img id="movie-poster" class="movie-cover" src="" alt=""/>
+      <div class="movie-meta-col">
+        <h1 id="movie-title" class="movie-h1"></h1>
+        <p id="movie-sub" class="movie-sub"></p>
+        <div id="movie-rating" class="movie-rating-row"></div>
+        <p id="movie-genre" class="movie-genre-tag"></p>
+
+        <div id="movie-extra-info" class="movie-extra-info">
+          <div class="mei-item"><span class="mei-icon">📅</span><span id="movie-year"></span></div>
+          <div class="mei-item"><span class="mei-icon">🌍</span><span id="movie-countries"></span></div>
+          <div class="mei-item"><span class="mei-icon">⏱</span><span id="movie-length"></span></div>
+          <div class="mei-item"><span class="mei-icon">🎬</span><span id="movie-directors"></span></div>
+          <div class="mei-item"><span class="mei-icon">🎭</span><span id="movie-actors"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Кнопка Избранное -->
+    <button id="btn-watchlist" class="watchlist-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+      <span>В список</span>
+    </button>
+
+    <p id="movie-desc" class="movie-desc-text"></p>
+
+    <div id="movie-loader" class="page-loader hidden"><div class="spin"></div></div>
+
+    <!-- Плеер Kinobox -->
+    <div id="kinobox-container" class="kb-container hidden">
+      <div id="player-lights-out" class="lights-out hidden"></div>
+      
+      <!-- Минималистичная кнопка закрытия -->
+      <button id="btn-player-close" class="player-close-floating" title="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+
+      <!-- ПЕРЕКЛЮЧАТЕЛЬ ИСТОЧНИКОВ -->
+      <div id="player-sources" class="player-sources-bar"></div>
+
+      <div id="kinobox-player-wrapper" class="kinobox-player-wrapper">
+        <div id="kinobox_player" class="kinobox_player"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════ ИЗБРАННОЕ ══════════════════════════════════════════════ -->
+<div id="screen-watchlist" class="screen hidden">
+  <header class="header">
+    <div class="header-logo"><span class="logo-name">Мой список</span></div>
+  </header>
+  <main class="home-scroll" style="padding-top:0">
+    <div id="watchlist-full" class="card-grid" style="padding-top:16px"></div>
+    <div id="watchlist-empty" class="empty-hint hidden">
+      <div class="empty-icon">📂</div>
+      <p>Список пуст</p>
+    </div>
+  </main>
+</div>
+
+<!-- ════ ИСТОРИЯ ════════════════════════════════════════════════ -->
+<div id="screen-history" class="screen hidden">
+  <header class="header">
+    <div class="header-logo"><span class="logo-name">История</span></div>
+    <button id="btn-clear" class="hdr-icon-btn danger" title="Очистить">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+    </button>
+  </header>
+  <main class="home-scroll" style="padding-top:0">
+    <div id="history-full" class="history-list"></div>
+    <div id="history-empty" class="empty-hint hidden">
+      <div class="empty-icon">🍿</div>
+      <p>Ещё ничего не смотрели</p>
+    </div>
+  </main>
+</div>
+
+<!-- ════ НИЖНЯЯ НАВИГАЦИЯ ═══════════════════════════════════════ -->
+<nav id="bottom-nav" class="bottom-nav">
+  <button class="nav-btn active" data-screen="home">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    <span>Главная</span>
+  </button>
+  <button class="nav-btn" data-screen="watchlist">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+    <span>Мой список</span>
+  </button>
+  <button class="nav-btn" data-screen="history">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    <span>История</span>
+  </button>
+  <button class="nav-btn" data-screen="faq">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span>FAQ</span>
+  </button>
+</nav>
+
+<!-- ════ FAQ ═══════════════════════════════════════════════════ -->
+<div id="screen-faq" class="screen hidden">
+  <header class="header">
+    <div class="header-logo"><span class="logo-name">FAQ</span></div>
+  </header>
+  <main class="home-scroll" style="padding-top:0">
+    <div class="faq-container">
+      <div class="faq-item">
+        <h3 class="faq-q">❓ Что такое CineGram?</h3>
+        <p class="faq-a">CineGram — это ваш персональный каталог фильмов и сериалов. Мы собираем актуальные данные из Кинопоиска и предоставляем удобный доступ к информации о кино.</p>
+      </div>
+      <div class="faq-item">
+        <h3 class="faq-q">🎬 Как смотреть фильмы?</h3>
+        <p class="faq-a">Откройте любой фильм и нажмите кнопку «Смотреть». Наш плеер автоматически найдёт доступные источники для просмотра.</p>
+      </div>
+      <div class="faq-item">
+        <h3 class="faq-q">📌 Как работают закладки?</h3>
+        <p class="faq-a">Нажмите на значок закладки на карточке фильма или внутри страницы фильма, чтобы добавить его в «Мой список». Список сохраняется в вашем браузере.</p>
+      </div>
+      <div class="faq-item">
+        <h3 class="faq-q">🌓 Как переключить тему?</h3>
+        <p class="faq-a">Нажмите на иконку солнца/луны в правом верхнем углу, чтобы переключиться между тёмной и светлой темой.</p>
+      </div>
+      <div class="faq-item">
+        <h3 class="faq-q">📡 Какие стриминги поддерживаются?</h3>
+        <p class="faq-a">Мы поддерживаем Netflix, HBO Max, Apple TV+, Amazon Prime, Кинопоиск и Амедиатеку. Каталоги пополняются бесконечной прокруткой.</p>
+      </div>
+      <div class="faq-item">
+        <h3 class="faq-q">💡 Откуда берутся данные?</h3>
+        <p class="faq-a">Все рейтинги, описания и постеры берутся из официального API Кинопоиска. Мы не храним никакого контента на своих серверах.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ════ СЕКРЕТНЫЙ БЕСТИАРИЙ ════════════════════════════════════ -->
+<div id="screen-secret" class="screen hidden">
+  <header class="header">
+    <div class="header-logo">
+      <span class="logo-mark" style="background: linear-gradient(135deg, #ff1a1a, #ff1a1a);box-shadow: 0 0 20px rgba(255, 26, 26, 0.4);">🇮🇹</span>
+      <span class="logo-name">Bestiario Italiano</span>
+    </div>
+    <button id="btn-secret-close" class="hdr-icon-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
+  </header>
+  <main class="home-scroll secret-bg">
+    <div class="secret-intro">
+      <h2 class="brainrot-title">SKIBIDI BESTIARIO</h2>
+      <p class="brainrot-subtitle">Вы нашли запретную коллекцию итальянских сущностей</p>
+    </div>
+    <div id="secret-grid" class="secret-grid"></div>
+    <div class="brainrot-footer">
+      <p>Grazie per aver trovato questa perla.</p>
+    </div>
+  </main>
+</div>
+
+<script src="/core.v11.js"></script>
+</body>
+</html>

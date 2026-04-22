@@ -2,18 +2,22 @@
 
 ## Обзор
 
-Данный модуль добавляет поддержку парсинга видеобалансеров (Alloha, VideoCDN, Kodik, Videobomba) для автоматического поиска и воспроизведения фильмов через встроенный плеер.
+Данный модуль добавляет поддержку парсинга видеобалансеров для автоматического поиска и воспроизведения фильмов через встроенный плеер. Все источники **бесплатные** и не требуют регистрации (кроме Kodik - опционально).
 
 ## Установленные компоненты
 
 ### 1. Модуль `balancers.js`
 Серверный модуль для поиска видеоисточников в популярных видеобалансерах:
 
-**Поддерживаемые балансеры:**
-- **Alloha** - бесплатный iframe-плеер
-- **VideoCDN** - CDN с видео контентом
-- **Kodik** - требует API токен (опционально)
+**Поддерживаемые бесплатные балансеры:**
+- **Alloha** - бесплатный iframe-плеер с фильмами и сериалами
+- **VideoCDN** - крупный CDN с видео контентом
+- **Kodik** - требует API токен (можно получить бесплатно на kodik.cc)
+- **Sibnet** - старый бесплатный видеохостинг
 - **Videobomba** - альтернативный источник
+- **VideoRot** - дополнительный бесплатный источник
+- **HDVB** - балансёр с HD контентом
+- **Jut.su** - для аниме (отключен по умолчанию)
 
 **Основные функции:**
 - `searchByTitle(title, year)` - поиск по названию фильма
@@ -69,10 +73,14 @@ kodik: {
 
 ```javascript
 const BALANCERS = {
-  alloha: { enabled: true },   // Включить Alloha
-  videocdn: { enabled: true }, // Включить VideoCDN
-  kodik: { enabled: false },   // Выключить Kodik (если нет токена)
-  videobomba: { enabled: true } // Включить Videobomba
+  alloha: { enabled: true },    // Alloha - включён
+  videocdn: { enabled: true },  // VideoCDN - включён
+  kodik: { enabled: false },    // Kodik - выключен (нет токена)
+  sibnet: { enabled: true },    // Sibnet - включён
+  videobomba: { enabled: true },// Videobomba - включён
+  videorot: { enabled: true },  // VideoRot - включён
+  hdvb: { enabled: true },      // HDVB - включён
+  jutsu: { enabled: false }     // Jut.su - только для аниме
 };
 ```
 
@@ -94,9 +102,27 @@ const BALANCERS = {
       "source": "alloha",
       "name": "Alloha",
       "type": "iframe",
-      "url": "https://alloha.tv/embed?search=...",
-      "directUrl": "https://alloha.tv/embed?search=...",
+      "url": "https://alloha.tv/player/index.php?search=...",
+      "directUrl": "https://alloha.tv/player/index.php?search=...",
       "quality": "auto",
+      "lang": "ru"
+    },
+    {
+      "source": "videocdn",
+      "name": "VideoCDN",
+      "type": "iframe",
+      "url": "https://videocdn.tv/api/embed/movie?title=...",
+      "directUrl": "https://videocdn.tv/api/embed/movie?title=...",
+      "quality": "auto",
+      "lang": "ru"
+    },
+    {
+      "source": "hdvb",
+      "name": "HDVB",
+      "type": "iframe",
+      "url": "https://hdvb.info/embed?search=...",
+      "directUrl": "https://hdvb.info/embed?search=...",
+      "quality": "HD",
       "lang": "ru"
     }
   ]
@@ -105,12 +131,22 @@ const BALANCERS = {
 
 ## Примечания
 
+- **Все источники бесплатные** - не требуется оплата или подписка
 - Некоторые балансеры могут требовать CORS проксирование
-- Kodik требует обязательной авторизации по API токену
+- Kodik требует обязательной авторизации по API токену (можно получить бесплатно)
 - Рекомендуется использовать HTTPS для production
 - Для обхода блокировок может потребоваться настройка proxy
+- Sibnet использует парсинг HTML для поиска видео
 
 ## Тестирование
 
 Проверить работу можно открыв любой фильм и нажав кнопку "Смотреть". 
 В переключателе источников должны появиться дополнительные опции от видеобалансеров.
+
+### Быстрый тест модуля
+
+```bash
+node -e "const b = require('./balancers'); b.searchByTitle('Матрица', 1999).then(r => console.log('Найдено источников:', r.length));"
+```
+
+Ожидаемый результат: 5-7 источников (Alloha, VideoCDN, Videobomba, VideoRot, HDVB, и др.)

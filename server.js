@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const axios = require('axios');
+const balancers = require('./balancers');
 
 const app = express();
 const PORT = 3000;
@@ -191,11 +192,39 @@ app.get('/api/movie', async (req, res) => {
       length: data.filmLength ? `${data.filmLength} мин.` : '',
       directors: directors.join(', '),
       actors: actors.join(', '),
-      url: urlStr
+      url: urlStr,
+      videoSources: []
     });
   } catch(e) {
     console.error(`[movie] Error fetching ID ${req.query.url}:`, e.message);
     res.status(500).json({error: 'Ошибка загрузки фильма', details: e.message});
+  }
+});
+
+// ── API для получения источников видео ──────────────────────────
+app.get('/api/video-sources', async (req, res) => {
+  try {
+    const { title, year, kpId } = req.query;
+    
+    if (!title && !kpId) {
+      return res.status(400).json({error: 'Требуется название или Kinopoisk ID'});
+    }
+    
+    let sources = [];
+    
+    if (title) {
+      sources = await balancers.searchByTitle(title, year || null);
+    }
+    
+    if (kpId && sources.length === 0) {
+      const kpSources = await balancers.searchByKinopoiskId(kpId);
+      sources.push(...kpSources);
+    }
+    
+    res.json({ sources });
+  } catch (e) {
+    console.error('[video-sources] Error:', e.message);
+    res.status(500).json({error: 'Ошибка поиска источников', details: e.message});
   }
 });
 

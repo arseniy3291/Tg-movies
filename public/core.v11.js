@@ -905,6 +905,11 @@ async function openMovieDetail(movie, autoPlay = false, updateUrl = false) {
     byId('movie-directors').textContent = detail.directors || '—';
     byId('movie-actors').textContent    = detail.actors || '—';
 
+    // Сохраняем источники видео из балансеров
+    if (detail.videoSources && detail.videoSources.length > 0) {
+      State.currentMovie.videoSources = detail.videoSources;
+    }
+
     updateWatchBtn(State.currentMovie);
 
     // Автозапуск плеера (при нажатии "Смотреть" на Hero)
@@ -955,7 +960,7 @@ byId('btn-watchlist').addEventListener('click', () => {
 byId('btn-play')?.addEventListener('click', launchKinobox);
 
 // ════════════════════════════════════════════════════════════════
-// MULTI-SOURCE PLAYER (CLEAN MODE)
+// MULTI-SOURCE PLAYER (CLEAN MODE + BALANCERS)
 // ════════════════════════════════════════════════════════════════
 
 const MIRRORS = [
@@ -965,7 +970,9 @@ const MIRRORS = [
 ];
 
 let playerState = {
-  currentMirrorIndex: 0
+  currentMirrorIndex: 0,
+  useBalancers: false,
+  balancerIndex: 0
 };
 
 function launchKinobox() {
@@ -978,18 +985,39 @@ function launchKinobox() {
 
   kbContainer.classList.remove('hidden');
   
-  // Render Switcher
+  // Проверяем есть ли источники от видеобалансеров
+  const hasBalancerSources = movie.videoSources && movie.videoSources.length > 0;
+  
+  // Render Switcher - комбинируем стандартные зеркала и балансеры
   if (sourcesBar) {
-    sourcesBar.innerHTML = MIRRORS.map((m, idx) => `
-      <button class="source-btn ${idx === playerState.currentMirrorIndex ? 'active' : ''}" 
-              onclick="switchPlayerSource(${idx})">
+    let buttonsHtml = '';
+    
+    // Добавляем стандартные зеркала
+    MIRRORS.forEach((m, idx) => {
+      const globalIdx = idx;
+      buttonsHtml += `<button class="source-btn ${globalIdx === playerState.currentMirrorIndex && !playerState.useBalancers ? 'active' : ''}" 
+                      onclick="switchPlayerSource(${globalIdx}, false)">
         ${m.name}
-      </button>
-    `).join('');
+      </button>`;
+    });
+    
+    // Добавляем источники от балансеров
+    if (hasBalancerSources) {
+      movie.videoSources.forEach((source, idx) => {
+        const globalIdx = MIRRORS.length + idx;
+        const isActive = globalIdx === playerState.currentMirrorIndex && playerState.useBalancers;
+        buttonsHtml += `<button class="source-btn ${isActive ? 'active' : ''}" 
+                        onclick="switchPlayerSource(${globalIdx}, true, ${idx})">
+          ${source.name || source.source}
+        </button>`;
+      });
+    }
+    
+    sourcesBar.innerHTML = buttonsHtml;
   }
 
   // Initial Load
-  loadMirror(playerState.currentMirrorIndex);
+  loadMirror(playerState.currentMirrorIndex, playerState.useBalancers, playerState.balancerIndex);
 
   // Smooth scroll to player
   setTimeout(() => {
@@ -1012,32 +1040,50 @@ function launchKinobox() {
   renderHistoryStrip();
 }
 
-window.switchPlayerSource = function(index) {
+window.switchPlayerSource = function(index, isBalancer, balancerIdx = 0) {
   playerState.currentMirrorIndex = index;
+  playerState.useBalancers = isBalancer;
+  playerState.balancerIndex = balancerIdx;
   
   // Update buttons
   const btns = document.querySelectorAll('.source-btn');
   btns.forEach((btn, idx) => btn.classList.toggle('active', idx === index));
   
-  loadMirror(index);
+  loadMirror(index, isBalancer, balancerIdx);
 };
 
-function loadMirror(index) {
+function loadMirror(index, isBalancer = false, balancerIdx = 0) {
   const movie = State.currentMovie;
   const playerDiv = byId('kinobox-container').querySelector('.kinobox_player');
   const wrapper = byId('kinobox-player-wrapper');
-  const mirror = MIRRORS[index];
 
   if (!movie || !playerDiv) return;
 
+  let iframeSrc = '';
+  let mirrorType = 'pure';
+
+  // Если используем видеобалансеры
+  if (isBalancer && movie.videoSources && movie.videoSources[balancerIdx]) {
+    const source = movie.videoSources[balancerIdx];
+    iframeSrc = source.directUrl || source.url;
+    mirrorType = 'pure'; // Балансеры обычно чистые
+  } else {
+    // Стандартные зеркала
+    const mirror = MIRRORS[index];
+    if (mirror) {
+      iframeSrc = mirror.url(movie.id);
+      mirrorType = mirror.type;
+    }
+  }
+
   // Apply Clipping for non-pure mirrors (hides headers)
   if (wrapper) {
-    wrapper.classList.toggle('clipped', mirror.type === 'clipped');
+    wrapper.classList.toggle('clipped', mirrorType === 'clipped');
   }
 
   playerDiv.innerHTML = `
     <iframe
-      src="${mirror.url(movie.id)}"
+      src="${iframeSrc}"
       width="100%" height="100%"
       frameborder="0"
       allow="autoplay; fullscreen; encrypted-media; picture-in-picture"

@@ -450,11 +450,13 @@ body {
   background: var(--bg2);
   aspect-ratio: 2/3;
   cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--glass-edge);
-  will-change: transform, opacity;
+  will-change: transform;
   transform: translateZ(0);
+  content-visibility: auto;
+  contain-intrinsic-size: 150px 225px;
 }
 
 .movie-card:hover {
@@ -606,8 +608,9 @@ body {
 
 /* ── Стриминг и Жанры на главной ────────────────────────── */
 .services-row, .chips-row {
-  justify-content: center !important; 
-  padding-bottom: 12px !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  padding: 12px 16px !important;
 }
 
 .service-card {
@@ -646,13 +649,29 @@ body {
   border-color: rgba(255,255,255,0.2);
 }
 
-/* Брендовые цвета сервисов */
-.service-card.srv-netflix { background: linear-gradient(135deg, #E50914, #831010); }
-.service-card.srv-hbo { background: linear-gradient(135deg, #9911FF, #000000); }
-.service-card.srv-apple { background: linear-gradient(135deg, #111111, #444444); }
-.service-card.srv-kinopoisk { background: linear-gradient(135deg, #FF6600, #CC4400); }
-.service-card.srv-amz { background: linear-gradient(135deg, #00A8E1, #1A1D23); }
-.service-card.srv-amediateka { background: linear-gradient(135deg, #D4AF37, #111111); }
+.service-card.active {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 20px var(--accent-glow), 0 0 30px rgba(255, 26, 26, 0.4) !important;
+  transform: translateY(-4px) scale(1.06) !important;
+  outline: 2px solid var(--accent);
+}
+
+/* Цвета жанров — тематика CineGram */
+.service-card.genre-thriller { background: linear-gradient(135deg, #2d0a0a, #5c1a1a); }
+.service-card.genre-drama { background: linear-gradient(135deg, #1a0a1e, #4a1535); }
+.service-card.genre-crime { background: linear-gradient(135deg, #1a0f0f, #3d1c1c); }
+.service-card.genre-romance { background: linear-gradient(135deg, #3d0a1a, #7a1535); }
+.service-card.genre-scifi { background: linear-gradient(135deg, #0d0a1e, #2a1545); }
+.service-card.genre-action { background: linear-gradient(135deg, #4a0a0a, #8b1a1a); }
+.service-card.genre-comedy { background: linear-gradient(135deg, #3d1a0a, #7a3515); }
+.service-card.genre-horror { background: linear-gradient(135deg, #0d0d1a, #1a1a3d); }
+.service-card.genre-animation { background: linear-gradient(135deg, #0a2d1a, #154a2d); }
+.service-card.genre-adventure { background: linear-gradient(135deg, #1a1a0a, #3d3515); }
+
+.genre-icon {
+  font-size: 20px;
+  margin-right: 6px;
+}
 
 .genre-chip {
   flex-shrink: 0;

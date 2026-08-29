@@ -2168,14 +2168,33 @@ a {
   height: 20px;
 }
 
-/* 🔥 BRUTE FORCE FIX: Скрываем любые элементы встроенного меню Kinobox, если настройки не сработали */
-.kinobox_menu, .kinobox-menu-container, [class*="kinobox_menu"] {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-  height: 0 !important;
-  width: 0 !important;
+/* ── Стилизация меню Kinobox ─────────────────────────── */
+.kinobox_menu {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin-bottom: 12px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.kinobox_button {
+  background: var(--bg2) !important;
+  border: 1px solid var(--glass-edge) !important;
+  color: var(--text) !important;
+  border-radius: 10px !important;
+  padding: 8px 14px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.kinobox_button_active {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 4px 14px var(--accent-glow) !important;
 }
 
 

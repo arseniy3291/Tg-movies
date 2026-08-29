@@ -1023,10 +1023,11 @@ byId('btn-play')?.addEventListener('click', launchKinobox);
 // ════════════════════════════════════════════════════════════════
 
 const MIRRORS = [
+  { id: 'kinobox',   name: '🎬 Kinobox Auto',       url: (id) => `https://kinobox.in/player?kp=${id}`,          type: 'kinobox' },
   { id: 'alloha',    name: 'Источник 1 (Alloha)',    url: (id) => `https://single.alloha.tv/?kp=${id}`,          type: 'pure' },
   { id: 'voidboost', name: 'Источник 2 (Voidboost)', url: (id) => `https://voidboost.net/embed/${id}`,           type: 'pure' },
   { id: 'vidsrc',    name: 'Источник 3 (VidSrc)',    url: (id) => `https://vidsrc.to/embed/movie/${id}`,         type: 'pure' },
-  { id: 'khub',      name: 'Источник 4 (Kinohub)',   url: (id) => `https://on.kinohub.vip/embed/kp/${id}`,       type: 'clipped' }
+  { id: 'kpvip',     name: 'Источник 4 (KP VIP)',    url: (id) => `https://kinopoisk.vip/embed/${id}`,           type: 'pure' }
 ];
 
 let playerState = {
@@ -1043,15 +1044,11 @@ function launchKinobox() {
   const sourcesBar  = byId('player-sources');
 
   kbContainer.classList.remove('hidden');
-  setTimeout(() => {
-    kbContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 100);
   
   // Render Switcher
   if (sourcesBar) {
     let buttonsHtml = '';
     
-    // Добавляем стандартные зеркала
     MIRRORS.forEach((m, idx) => {
       const globalIdx = idx;
       buttonsHtml += `<button class="source-btn ${globalIdx === playerState.currentMirrorIndex && !playerState.useBalancers ? 'active' : ''}" 
@@ -1060,7 +1057,6 @@ function launchKinobox() {
       </button>`;
     });
     
-    // Добавляем источники от балансеров
     if (movie.videoSources && movie.videoSources.length > 0) {
       movie.videoSources.forEach((source, idx) => {
         const globalIdx = MIRRORS.length + idx;
@@ -1123,6 +1119,34 @@ function loadMirror(index, isBalancer = false, balancerIdx = 0) {
 
   if (!movie || !playerDiv) return;
 
+  playerDiv.innerHTML = '';
+
+  const mirror = MIRRORS[index];
+  if (!isBalancer && mirror && mirror.type === 'kinobox' && typeof window.Kinobox !== 'undefined') {
+    try {
+      new window.Kinobox('.kinobox_player', {
+        search: {
+          kinopoisk: movie.id,
+          title: movie.title
+        },
+        menu: {
+          enable: true,
+          default: 'alloha'
+        },
+        players: {
+          alloha:    { enable: true, position: 1, title: 'Alloha' },
+          videocdn:  { enable: true, position: 2, title: 'VideoCDN' },
+          voidboost: { enable: true, position: 3, title: 'Voidboost' },
+          kodik:     { enable: true, position: 4, title: 'Kodik' },
+          collaps:   { enable: true, position: 5, title: 'Collaps' }
+        }
+      }).init();
+      return;
+    } catch (e) {
+      console.error('[Kinobox SDK error]', e);
+    }
+  }
+
   let iframeSrc = '';
   let mirrorType = 'pure';
 
@@ -1131,11 +1155,9 @@ function loadMirror(index, isBalancer = false, balancerIdx = 0) {
     iframeSrc = source.directUrl || source.url;
     mirrorType = 'pure';
   } else {
-    const mirror = MIRRORS[index];
-    if (mirror) {
-      iframeSrc = mirror.url(movie.id);
-      mirrorType = mirror.type;
-    }
+    const m = MIRRORS[index] || MIRRORS[1];
+    iframeSrc = m.url(movie.id);
+    mirrorType = m.type;
   }
 
   if (wrapper) {

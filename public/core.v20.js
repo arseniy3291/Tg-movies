@@ -1023,10 +1023,10 @@ byId('btn-play')?.addEventListener('click', launchKinobox);
 // ════════════════════════════════════════════════════════════════
 
 const MIRRORS = [
-  { id: 'alloha',  name: 'Источник 1 (Alloha)',  url: (id) => `https://alloha.tv/player/index.php?kp=${id}`, type: 'pure' },
-  { id: 'vidsrc',  name: 'Источник 2 (VidSrc)',  url: (id) => `https://vidsrc.me/embed/movie?kp=${id}`,      type: 'pure' },
-  { id: 'kinobox', name: 'Источник 3 (Kinobox)', url: (id) => `https://kinobox.in/player?kp=${id}`,         type: 'pure' },
-  { id: 'khub',    name: 'Источник 4 (Kinohub)', url: (id) => `https://on.kinohub.vip/embed/kp/${id}`,      type: 'clipped' }
+  { id: 'alloha',    name: 'Источник 1 (Alloha)',    url: (id) => `https://single.alloha.tv/?kp=${id}`,          type: 'pure' },
+  { id: 'voidboost', name: 'Источник 2 (Voidboost)', url: (id) => `https://voidboost.net/embed/${id}`,           type: 'pure' },
+  { id: 'vidsrc',    name: 'Источник 3 (VidSrc)',    url: (id) => `https://vidsrc.to/embed/movie/${id}`,         type: 'pure' },
+  { id: 'khub',      name: 'Источник 4 (Kinohub)',   url: (id) => `https://on.kinohub.vip/embed/kp/${id}`,       type: 'clipped' }
 ];
 
 let playerState = {
@@ -1047,10 +1047,7 @@ function launchKinobox() {
     kbContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 100);
   
-  // Проверяем есть ли источники от видеобалансеров
-  const hasBalancerSources = movie.videoSources && movie.videoSources.length > 0;
-  
-  // Render Switcher - комбинируем стандартные зеркала и балансеры
+  // Render Switcher
   if (sourcesBar) {
     let buttonsHtml = '';
     
@@ -1064,7 +1061,7 @@ function launchKinobox() {
     });
     
     // Добавляем источники от балансеров
-    if (hasBalancerSources) {
+    if (movie.videoSources && movie.videoSources.length > 0) {
       movie.videoSources.forEach((source, idx) => {
         const globalIdx = MIRRORS.length + idx;
         const isActive = globalIdx === playerState.currentMirrorIndex && playerState.useBalancers;
@@ -1102,6 +1099,7 @@ function launchKinobox() {
   if (closePlayerBtn) {
     closePlayerBtn.onclick = () => {
       kbContainer.classList.add('hidden');
+      const playerDiv = kbContainer.querySelector('.kinobox_player');
       if (playerDiv) playerDiv.innerHTML = '';
     };
   }
@@ -1120,7 +1118,7 @@ window.switchPlayerSource = function(index, isBalancer, balancerIdx = 0) {
 
 function loadMirror(index, isBalancer = false, balancerIdx = 0) {
   const movie = State.currentMovie;
-  const playerDiv = byId('kinobox-container').querySelector('.kinobox_player');
+  const playerDiv = byId('kinobox-container')?.querySelector('.kinobox_player');
   const wrapper = byId('kinobox-player-wrapper');
 
   if (!movie || !playerDiv) return;
@@ -1128,13 +1126,11 @@ function loadMirror(index, isBalancer = false, balancerIdx = 0) {
   let iframeSrc = '';
   let mirrorType = 'pure';
 
-  // Если используем видеобалансеры
   if (isBalancer && movie.videoSources && movie.videoSources[balancerIdx]) {
     const source = movie.videoSources[balancerIdx];
     iframeSrc = source.directUrl || source.url;
-    mirrorType = 'pure'; // Балансеры обычно чистые
+    mirrorType = 'pure';
   } else {
-    // Стандартные зеркала
     const mirror = MIRRORS[index];
     if (mirror) {
       iframeSrc = mirror.url(movie.id);
@@ -1142,7 +1138,6 @@ function loadMirror(index, isBalancer = false, balancerIdx = 0) {
     }
   }
 
-  // Apply Clipping for non-pure mirrors (hides headers)
   if (wrapper) {
     wrapper.classList.toggle('clipped', mirrorType === 'clipped');
   }
@@ -1154,7 +1149,6 @@ function loadMirror(index, isBalancer = false, balancerIdx = 0) {
       frameborder="0"
       allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
       allowfullscreen
-      referrerpolicy="no-referrer"
       style="border-radius:12px; background: #000;">
     </iframe>
   `;

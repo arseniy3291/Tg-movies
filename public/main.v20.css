@@ -129,10 +129,12 @@ a {
 }
 
 .header-logo-full-img {
-  height: 34px;
+  height: 26px;
+  max-height: 26px;
   width: auto;
   display: block;
-  filter: drop-shadow(0 0 10px rgba(229, 9, 20, 0.45));
+  object-fit: contain;
+  filter: drop-shadow(0 0 8px rgba(229, 9, 20, 0.4));
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -3221,6 +3223,11 @@ body.low-power-mode *::after {
   .header {
     padding-top: env(safe-area-inset-top, 0px);
     height: calc(56px + env(safe-area-inset-top, 0px));
+  }
+
+  .header-logo-full-img {
+    height: 24px !important;
+    max-height: 24px !important;
   }
 
   .bottom-nav {

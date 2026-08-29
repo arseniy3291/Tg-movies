@@ -1023,9 +1023,11 @@ byId('btn-play')?.addEventListener('click', launchKinobox);
 // ════════════════════════════════════════════════════════════════
 
 const MIRRORS = [
-  { id: 'alloha', name: 'Источник 1 (Чистый)', url: (id) => `https://alloha.tv/player/index.php?kp=${id}`, type: 'pure' },
-  { id: 'bazon',  name: 'Источник 2 (Bazon)',   url: (id) => `https://bazon.cc/video/embed/kp/${id}`,      type: 'pure' },
-  { id: 'khub',   name: 'Источник 3 (Mirror)',  url: (id) => `https://on.kinohub.vip/embed/kp/${id}`,      type: 'clipped' }
+  { id: 'alloha',   name: 'Источник 1 (1080p Full HD)', url: (id) => `https://alloha.tv/player/index.php?kp=${id}`, type: 'pure' },
+  { id: 'kodik',    name: 'Источник 2 (Kodik Multi)',   url: (id) => `https://kodik.cc/find-player?kinopoisk=${id}`, type: 'pure' },
+  { id: 'collaps',  name: 'Источник 3 (Collaps HD)',   url: (id) => `https://api.collaps.org/embed/movie/${id}`,    type: 'pure' },
+  { id: 'bazon',    name: 'Источник 4 (Bazon Ultra)',  url: (id) => `https://bazon.cc/video/embed/kp/${id}`,        type: 'pure' },
+  { id: 'voidboost',name: 'Источник 5 (Voidboost 4K)', url: (id) => `https://voidboost.net/embed/${id}`,            type: 'pure' }
 ];
 
 let playerState = {
@@ -1101,6 +1103,7 @@ function launchKinobox() {
   if (closePlayerBtn) {
     closePlayerBtn.onclick = () => {
       kbContainer.classList.add('hidden');
+      const playerDiv = kbContainer.querySelector('.kinobox_player');
       if (playerDiv) playerDiv.innerHTML = '';
     };
   }
@@ -1131,7 +1134,7 @@ function loadMirror(index, isBalancer = false, balancerIdx = 0) {
   if (isBalancer && movie.videoSources && movie.videoSources[balancerIdx]) {
     const source = movie.videoSources[balancerIdx];
     iframeSrc = source.directUrl || source.url;
-    mirrorType = 'pure'; // Балансеры обычно чистые
+    mirrorType = 'pure';
   } else {
     // Стандартные зеркала
     const mirror = MIRRORS[index];
@@ -1141,7 +1144,6 @@ function loadMirror(index, isBalancer = false, balancerIdx = 0) {
     }
   }
 
-  // Apply Clipping for non-pure mirrors (hides headers)
   if (wrapper) {
     wrapper.classList.toggle('clipped', mirrorType === 'clipped');
   }
@@ -1151,6 +1153,7 @@ function loadMirror(index, isBalancer = false, balancerIdx = 0) {
       src="${iframeSrc}"
       width="100%" height="100%"
       frameborder="0"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
       allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
       allowfullscreen
       referrerpolicy="no-referrer"

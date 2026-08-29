@@ -206,19 +206,8 @@ app.get('/api/search', async (req, res) => {
 
     let kwCards = [];
     if (!genre && !year && q) {
-      try {
-        const kwData = await kpFetch(`/api/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(q)}&page=${page}`);
-        kwCards = (kwData.films || []).map(mapCard).filter(Boolean);
-      } catch (e) {
-        kwCards = [];
-      }
-
-      if (kwCards.length === 0) {
-        try {
-          const fallbackData = await kpFetch(`/api/v2.2/films?keyword=${encodeURIComponent(q)}&page=${page}`);
-          kwCards = (fallbackData.items || []).map(mapCard).filter(Boolean);
-        } catch (e) {}
-      }
+      const kwData = await kpFetch(`/api/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(q)}&page=${page}`, 5 * 60 * 1000);
+      kwCards = (kwData.films || []).map(mapCard).filter(Boolean);
     } else {
       let kpUrl = `/api/v2.2/films?page=${page}`;
       if (q) kpUrl += `&keyword=${encodeURIComponent(q)}`;
@@ -231,7 +220,7 @@ app.get('/api/search', async (req, res) => {
           kpUrl += `&yearFrom=${year}&yearTo=${year}`;
         }
       }
-      const data = await kpFetch(kpUrl);
+      const data = await kpFetch(kpUrl, 5 * 60 * 1000);
       kwCards = (data.items || []).map(mapCard).filter(Boolean);
     }
 

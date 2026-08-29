@@ -3160,3 +3160,143 @@ body.low-power-mode *::after {
   background: rgba(255, 26, 26, 0.3);
   border-color: #ff1a1a;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   МОБИЛЬНАЯ АДАПТАЦИЯ (MOBILE ULTRA RESPONSIVE DESIGN)
+   ══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Safe areas for iPhone notch and home bar */
+  .header {
+    padding-top: env(safe-area-inset-top, 0px);
+    height: calc(56px + env(safe-area-inset-top, 0px));
+  }
+
+  .bottom-nav {
+    padding-bottom: max(6px, env(safe-area-inset-bottom, 0px));
+    height: calc(62px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .home-scroll,
+  .movie-detail-scroll {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Compact Hero Header on Mobile */
+  .hero-banner {
+    height: 180px !important;
+    min-height: 180px !important;
+  }
+
+  .hero-banner-content {
+    padding-bottom: 8px !important;
+  }
+
+  .splash-title {
+    font-size: 32px !important;
+    letter-spacing: -1px !important;
+  }
+
+  .splash-subtitle {
+    font-size: 10px !important;
+    letter-spacing: 3px !important;
+    margin-bottom: 6px !important;
+  }
+
+  .tabs-wrapper {
+    padding: 8px 12px 4px !important;
+  }
+
+  .modern-segmented-control {
+    width: 280px !important;
+    height: 44px !important;
+  }
+
+  .tab-segment {
+    font-size: 13px !important;
+    padding: 8px 0 !important;
+  }
+
+  /* Compact Genre Chips Slider */
+  .chips-row {
+    padding: 10px 14px 24px !important;
+    gap: 8px !important;
+    margin-bottom: -16px !important;
+  }
+
+  .genre-chip {
+    min-width: 110px !important;
+    height: 48px !important;
+    padding: 0 14px !important;
+    font-size: 12px !important;
+    border-radius: 12px !important;
+  }
+
+  /* Grid layout for Mobile Movies: 2 clean columns */
+  #popular-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+    padding: 12px 14px 100px !important;
+  }
+
+  .movie-card {
+    border-radius: 14px !important;
+  }
+
+  /* Movie Details Screen Mobile Layout Optimization */
+  .movie-cover-row {
+    gap: 14px !important;
+    padding: 14px 14px 8px !important;
+  }
+
+  .movie-cover {
+    width: 110px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7) !important;
+  }
+
+  .movie-h1 {
+    font-size: 20px !important;
+    line-height: 1.25 !important;
+    color: #ffffff !important;
+  }
+
+  .movie-sub {
+    font-size: 12px !important;
+    color: #9aa0b4 !important;
+  }
+
+  .movie-extra-info {
+    gap: 5px !important;
+    font-size: 12px !important;
+  }
+
+  .mei-item span:last-child {
+    color: #eef1fb !important;
+    font-weight: 600 !important;
+  }
+
+  .movie-desc-text {
+    padding: 12px 14px 18px !important;
+    font-size: 14px !important;
+    line-height: 1.55 !important;
+    color: #d1d5e4 !important;
+  }
+
+  .big-play-btn,
+  .watchlist-btn {
+    width: calc(100% - 28px) !important;
+    margin-left: 14px !important;
+    margin-right: 14px !important;
+    border-radius: 14px !important;
+  }
+
+  .big-play-btn {
+    height: 52px !important;
+    font-size: 16px !important;
+  }
+
+  .watchlist-btn {
+    height: 48px !important;
+    font-size: 14px !important;
+  }
+}

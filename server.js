@@ -4,21 +4,63 @@ const path = require('path');
 const axios = require('axios');
 const balancers = require('./balancers');
 
+const zlib = require('zlib');
+
 const app = express();
 const PORT = 3000;
 // Открытый тестовый ключ неофициального API Кинопоиска
 const KP_KEY = '8c8e1a50-6322-4135-8875-5d40a5420d86';
 
+// ── Встроенная сжатие Gzip для минимального размера передаваемых данных ──
+app.use((req, res, next) => {
+  const acceptEncoding = req.headers['accept-encoding'] || '';
+  if (!acceptEncoding.includes('gzip') || req.url.startsWith('/api/image')) {
+    return next();
+  }
+
+  const oldSend = res.send;
+  res.send = function (body) {
+    if (res.headersSent || !body) return oldSend.call(this, body);
+    const buf = Buffer.isBuffer(body) ? body : Buffer.from(body);
+    if (buf.length < 1024) return oldSend.call(this, body);
+
+    zlib.gzip(buf, (err, gzipped) => {
+      if (err) return oldSend.call(this, body);
+      res.setHeader('Content-Encoding', 'gzip');
+      res.setHeader('Content-Length', gzipped.length);
+      oldSend.call(this, gzipped);
+    });
+  };
+  next();
+});
+
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '7d',
+  etag: true
+}));
 
-// ── Функция запроса к Kinopoisk Unofficial API ───────────────────
+// ── Внутренний кэш API ответов Кинопоиска в RAM (10 минут TTL) ────
+const apiCacheMap = new Map();
+const API_CACHE_TTL = 10 * 60 * 1000;
+
 async function kpFetch(urlPath) {
+  const now = Date.now();
+  if (apiCacheMap.has(urlPath)) {
+    const entry = apiCacheMap.get(urlPath);
+    if (now - entry.timestamp < API_CACHE_TTL) {
+      return entry.data;
+    }
+    apiCacheMap.delete(urlPath);
+  }
+
   try {
     const response = await axios.get(`https://kinopoiskapiunofficial.tech${urlPath}`, {
-      headers: { 'X-API-KEY': KP_KEY }
+      headers: { 'X-API-KEY': KP_KEY },
+      timeout: 8000
     });
+    apiCacheMap.set(urlPath, { data: response.data, timestamp: now });
     return response.data;
   } catch (error) {
     console.error(`[kpFetch] Error ${urlPath}:`, error.message);
@@ -58,13 +100,26 @@ function mapCard(item) {
 // API Приложения
 // ════════════════════════════════════════════════════════════════
 
+// ── Память кэша обложек для молниеносной загрузки ─────────────────
+const imageCache = new Map();
+const MAX_IMAGE_CACHE = 300;
+
 app.get('/api/image', async (req, res) => {
   const urlStr = req.query.url;
   if (!urlStr) return res.status(400).end();
   
+  // Возврат из RAM кэша сервера
+  if (imageCache.has(urlStr)) {
+    const cached = imageCache.get(urlStr);
+    res.setHeader('Content-Type', cached.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    return res.send(cached.buffer);
+  }
+
   try {
     const response = await axios.get(urlStr, {
       responseType: 'arraybuffer',
+      timeout: 8000,
       headers: { 
         'X-API-KEY': KP_KEY,
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -72,9 +127,19 @@ app.get('/api/image', async (req, res) => {
       }
     });
     
-    res.setHeader('Content-Type', response.headers['content-type'] || 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.send(response.data);
+    const contentType = response.headers['content-type'] || 'image/jpeg';
+    const buffer = Buffer.from(response.data);
+
+    // Ограничение размера RAM кэша
+    if (imageCache.size >= MAX_IMAGE_CACHE) {
+      const firstKey = imageCache.keys().next().value;
+      imageCache.delete(firstKey);
+    }
+    imageCache.set(urlStr, { buffer, contentType });
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    res.send(buffer);
   } catch (e) {
     console.error(`[image] Proxy fail: ${urlStr}`, e.message);
     res.status(e.response?.status || 500).end();
@@ -89,8 +154,6 @@ app.get('/api/popular', async (req, res) => {
     
     if (type === 'series') {
       kpPath = `/api/v2.2/films/collections?type=TOP_250_TV_SHOWS&page=${page}`;
-    } else if (type === 'cartoons') {
-      kpPath = `/api/v2.2/films?genres=18&order=NUM_VOTE&type=ALL&ratingFrom=7&yearFrom=2015&page=${page}`;
     }
 
     const data = await kpFetch(kpPath);
@@ -154,8 +217,16 @@ app.get('/api/search', async (req, res) => {
 app.get('/api/discover', async (req, res) => {
   try {
     const genre = req.query.genre || '';
+    const type = req.query.type || 'films';
     const page = req.query.page || 1;
-    const data = await kpFetch(`/api/v2.2/films?genres=${encodeURIComponent(genre)}&order=RATING&type=ALL&ratingFrom=7&page=${page}`);
+    
+    let kpTypes = type === 'series' ? 'TV_SERIES' : 'FILM';
+
+    let kpUrl = `/api/v2.2/films?order=RATING&ratingFrom=6&page=${page}`;
+    if (genre) kpUrl += `&genres=${encodeURIComponent(genre)}`;
+    if (kpTypes) kpUrl += `&type=${kpTypes}`;
+
+    const data = await kpFetch(kpUrl);
     res.json((data.items || []).map(mapCard).filter(Boolean));
   } catch(e) {
     res.status(500).json({error: 'Ошибка поиска жанров'});

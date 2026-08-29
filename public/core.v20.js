@@ -62,7 +62,9 @@ if (tg) { tg.ready(); tg.expand(); }
     if (delta < interval) return;
     lastTime = timestamp - (delta % interval);
 
-    ctx.fillStyle = 'rgba(8, 8, 8, 0.25)';
+    const isLight = document.body.classList.contains('light-theme');
+
+    ctx.fillStyle = isLight ? 'rgba(243, 244, 248, 0.35)' : 'rgba(8, 8, 8, 0.25)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.font = `${fontSize}px monospace`;
 
@@ -89,12 +91,16 @@ if (tg) { tg.ready(); tg.expand(); }
       if (distSq < r2) {
         const glowFactor = 1 - Math.sqrt(distSq) / glowRadius;
         alpha = Math.min(1, drop.baseAlpha + glowFactor * 0.85);
-        r = 255;
-        g = 40 + Math.floor(glowFactor * 120);
-        b = 30 + Math.floor(glowFactor * 100);
+        r = 229;
+        g = Math.floor(9 + glowFactor * 40);
+        b = Math.floor(20 + glowFactor * 40);
       } else {
         alpha = drop.baseAlpha;
-        r = 220; g = 20; b = 20; 
+        if (isLight) {
+          r = 20; g = 22; b = 35; // Чёрные падающие буквы для светлой темы
+        } else {
+          r = 220; g = 20; b = 20; // Красные буквы для тёмной темы
+        }
       }
 
       ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
@@ -164,6 +170,8 @@ function updateWatchBtn(movie) {
 const State = {
   screen:       'home',
   activeTab:    'films',
+  selectedGenre: '',
+  selectedGenreName: '',
   filterMode:   '', 
   filterValue:  '',
   page:         1,
@@ -174,6 +182,58 @@ const State = {
   filters:      { genre: '', year: '' },
   manualPlayer: 'alloha',
   playerTimer:  null
+};
+
+const I18N = {
+  ru: {
+    films: 'Фильмы',
+    series: 'Сериалы',
+    settingsTitle: 'Настройки',
+    themeTitle: 'Светлая тема',
+    themeSub: 'Белый фоновый режим',
+    langTitle: 'Язык / Language',
+    langSub: 'Английский / Русский',
+    perfTitle: 'Режим для слабых ПК',
+    perfSub: 'Без матрицы и тяжелых эффектов',
+    searchPlaceholder: 'Поиск…',
+    navHome: 'Главная',
+    navWatchlist: 'Мой список',
+    navHistory: 'История',
+    navSettings: 'Настройки'
+  },
+  en: {
+    films: 'Movies',
+    series: 'TV Shows',
+    settingsTitle: 'Settings',
+    themeTitle: 'Light Theme',
+    themeSub: 'White color palette mode',
+    langTitle: 'Language / Язык',
+    langSub: 'English / Russian',
+    perfTitle: 'Low Power Mode',
+    perfSub: 'Disables matrix rain & heavy effects',
+    searchPlaceholder: 'Search…',
+    navHome: 'Home',
+    navWatchlist: 'My List',
+    navHistory: 'History',
+    navSettings: 'Settings'
+  }
+};
+
+const GENRES_MAP = {
+  1: { ru: 'Триллер', en: 'Thriller' },
+  2: { ru: 'Драма', en: 'Drama' },
+  3: { ru: 'Криминал', en: 'Crime' },
+  4: { ru: 'Мелодрама', en: 'Romance' },
+  6: { ru: 'Фантастика', en: 'Sci-Fi' },
+  11: { ru: 'Боевик', en: 'Action' },
+  13: { ru: 'Комедия', en: 'Comedy' },
+  17: { ru: 'Ужасы', en: 'Horror' }
+};
+
+const AppSettings = {
+  lightTheme: localStorage.getItem('cfg_light_theme') === 'true',
+  lang: localStorage.getItem('cfg_lang') || 'ru',
+  lowPower: localStorage.getItem('cfg_low_power') === 'true'
 };
 
 const GENRES = [
@@ -201,7 +261,7 @@ const Screens = {
   movie:     byId('screen-movie'),
   history:   byId('screen-history'),
   watchlist: byId('screen-watchlist'),
-  faq:       byId('screen-faq'),
+  settings:  byId('screen-settings'),
   secret:    byId('screen-secret'),
 };
 
@@ -218,12 +278,13 @@ function showScreen(name, updateUrl = false) {
   
   byId('bottom-nav').style.display = (name === 'secret') ? 'none' : 'flex';
   State.screen = name;
+  if (name === 'home') renderGenresAndServices();
   
   // Dynamic Title
   let docTitle = 'CineGram';
   if (name === 'history') docTitle = 'История | CineGram';
   else if (name === 'watchlist') docTitle = 'Мой список | CineGram';
-  else if (name === 'faq') docTitle = 'FAQ | CineGram';
+  else if (name === 'settings') docTitle = 'Настройки | CineGram';
   else if (name === 'secret') docTitle = 'SECRET BESTIARIO';
   document.title = docTitle;
   
@@ -235,7 +296,7 @@ function showScreen(name, updateUrl = false) {
     let path = '/';
     if (name === 'history') path = '/history';
     else if (name === 'watchlist') path = '/watchlist';
-    else if (name === 'faq') path = '/faq';
+    else if (name === 'settings') path = '/settings';
     else if (name === 'secret') path = '/secret';
     else if (name === 'home') {
        path = State.activeTab === 'films' ? '/' : `/${State.activeTab}`;
@@ -278,10 +339,7 @@ async function handleRoute() {
     loadPopular(true);
   }
   else if (path === '/cartoons') {
-    State.activeTab = 'cartoons';
-    updateTabsUI();
-    showScreen('home');
-    loadPopular(true);
+    navigate('/');
   }
   else if (path.startsWith('/movie/')) {
     const id = path.split('/').pop();
@@ -301,8 +359,8 @@ async function handleRoute() {
     renderWatchlistScreen();
     showScreen('watchlist');
   }
-  else if (path === '/faq') {
-    showScreen('faq');
+  else if (path === '/settings') {
+    showScreen('settings');
   }
   else if (path === '/secret') {
     openSecretScreen();
@@ -314,8 +372,20 @@ async function handleRoute() {
 }
 
 function updateTabsUI() {
-  document.querySelectorAll('.tab').forEach(btn => {
+  const switcher = byId('type-switcher');
+  const isSeries = State.activeTab === 'series';
+  if (switcher) {
+    switcher.setAttribute('data-active-index', isSeries ? '1' : '0');
+  }
+  document.querySelectorAll('.tab-segment').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.type === State.activeTab);
+  });
+  updateGenreButtonsUI();
+}
+
+function updateGenreButtonsUI() {
+  document.querySelectorAll('#genres-row .genre-chip').forEach(btn => {
+    btn.classList.toggle('active', String(btn.dataset.genreId) === String(State.selectedGenre));
   });
 }
 
@@ -326,30 +396,13 @@ window.addEventListener('popstate', (e) => {
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const t = btn.dataset.screen;
-    let path = `/${t}`;
-    if (t === 'home') path = '/';
-    
-    // Пасхалка 10 кликов на FAQ
-    if (t === 'faq') {
-      if (handleFaqClick()) return; 
-    } else {
-      faqClickCount = 0;
-    }
-
+    if (!t) return;
+    const path = t === 'home' ? '/' : `/${t}`;
     navigate(path);
   });
 });
 
-let faqClickCount = 0;
-function handleFaqClick() {
-  faqClickCount++;
-  if (faqClickCount >= 10) {
-    faqClickCount = 0;
-    navigate('/secret');
-    return true;
-  }
-  return false;
-}
+
 
 // ════════════════════════════════════════════════════════════════
 // КАРТОЧКИ
@@ -373,7 +426,7 @@ function makeCard(movie) {
   obs.observe(div);
   div.innerHTML = `
     ${movie.poster
-      ? `<img src="${movie.poster}" alt="${movie.title || ''}" loading="lazy" onerror="this.parentElement.style.background='var(--bg3)';this.remove()">`
+      ? `<img src="${movie.poster}" alt="${movie.title || ''}" loading="lazy" decoding="async" onload="this.classList.add('img-loaded')" onerror="this.parentElement.style.background='var(--bg3)';this.remove()">`
       : ''}
     <div class="card-shade">
       <div class="card-name">${movie.title || ''}</div>
@@ -383,6 +436,16 @@ function makeCard(movie) {
     ${progress > 2 ? `<div class="card-pg"><div class="card-pg-fill" style="width:${Math.min(progress,100)}%"></div></div>` : ''}
   `;
   div.addEventListener('click', () => navigate(movie.url));
+
+  let prefetchTimer = null;
+  div.addEventListener('mouseenter', () => {
+    prefetchTimer = setTimeout(() => {
+      if (movie.id) api(`/api/movie?id=${movie.id}`).catch(() => {});
+    }, 150);
+  });
+  div.addEventListener('mouseleave', () => {
+    if (prefetchTimer) clearTimeout(prefetchTimer);
+  });
 
   // Кнопка быстрого добавления в закладки
   const inWatch = State.watchlist.some(m => m.id === movie.id);
@@ -437,8 +500,11 @@ async function loadPopular(reset = false) {
 
   try {
     let endpoint = `/api/popular?type=${State.activeTab}&page=${State.page}`;
-    if (State.filterMode === 'genre') endpoint = `/api/discover?genre=${State.filterValue}&page=${State.page}`;
-    else if (State.filterMode === 'service') endpoint = `/api/search?q=${State.filterValue}&page=${State.page}`;
+    if (State.selectedGenre) {
+      endpoint = `/api/discover?type=${State.activeTab}&genre=${State.selectedGenre}&page=${State.page}`;
+    } else if (State.filterMode === 'service') {
+      endpoint = `/api/search?q=${State.filterValue}&page=${State.page}`;
+    }
 
     const data = await api(endpoint);
     if (reset) {
@@ -452,7 +518,9 @@ async function loadPopular(reset = false) {
       return true;
     });
 
-    unique.forEach(m => popularGrid.appendChild(makeCard(m)));
+    const fragment = document.createDocumentFragment();
+    unique.forEach(m => fragment.appendChild(makeCard(m)));
+    popularGrid.appendChild(fragment);
     State.page++;
     isLoading = false;
   } catch {
@@ -496,7 +564,7 @@ homeScroll.addEventListener('scroll', () => {
   }
 });
 
-document.querySelectorAll('.tab').forEach(btn => {
+document.querySelectorAll('.tab-segment').forEach(btn => {
   btn.addEventListener('click', () => {
     const type = btn.dataset.type;
     const path = type === 'films' ? '/' : `/${type}`;
@@ -504,59 +572,78 @@ document.querySelectorAll('.tab').forEach(btn => {
   });
 });
 
+function toggleGenreFilter(genreId, genreName) {
+  if (String(State.selectedGenre) === String(genreId)) {
+    State.selectedGenre = '';
+    State.selectedGenreName = '';
+  } else {
+    State.selectedGenre = String(genreId);
+    State.selectedGenreName = genreName;
+  }
+
+  updateTabsUI();
+  loadPopular(true);
+}
+
 function applyFilter(mode, value, titleName) {
   State.filterMode = mode;
   State.filterValue = value;
-  popularGrid.previousElementSibling.querySelector('.section-title').textContent = titleName;
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   loadPopular(true);
-  // Scroll to grid
-  popularGrid.previousElementSibling.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function setupDragScroll(row) {
+  if (!row || row.dataset.dragInit) return;
+  row.dataset.dragInit = 'true';
+  let isDown = false;
+  let startX;
+  let scrollLeft;
+
+  row.addEventListener('mousedown', (e) => {
+    isDown = true;
+    startX = e.pageX - row.offsetLeft;
+    scrollLeft = row.scrollLeft;
+  });
+  row.addEventListener('mouseleave', () => { isDown = false; });
+  row.addEventListener('mouseup', () => { isDown = false; });
+  row.addEventListener('mousemove', (e) => {
+    if (!isDown) return;
+    e.preventDefault();
+    const x = e.pageX - row.offsetLeft;
+    const walk = (x - startX) * 1.5;
+    row.scrollLeft = scrollLeft - walk;
+  });
 }
 
 function renderGenresAndServices() {
   const gRow = byId('genres-row');
-  const sRow = byId('services-row');
-  if (!gRow || !sRow) return;
+  if (!gRow) return;
 
   gRow.innerHTML = '';
-  sRow.innerHTML = '';
+  const lang = AppSettings.lang || 'ru';
 
+  const fragment = document.createDocumentFragment();
   GENRES.forEach(g => {
     const btn = document.createElement('button');
-    btn.className = 'genre-chip fade-up';
-    btn.textContent = g.n;
-    btn.onclick = () => applyFilter('genre', g.id, `Жанр: ${g.n}`);
-    obs.observe(btn);
-    gRow.appendChild(btn);
+    btn.className = 'genre-chip';
+    btn.dataset.genreId = g.id;
+    const nameInLang = (GENRES_MAP[g.id] && GENRES_MAP[g.id][lang]) || g.n;
+    btn.textContent = nameInLang;
+    btn.onclick = () => toggleGenreFilter(g.id, nameInLang);
+    if (String(g.id) === String(State.selectedGenre)) {
+      btn.classList.add('active');
+    }
+    fragment.appendChild(btn);
   });
+  gRow.appendChild(fragment);
 
-  SERVICES.forEach(s => {
-    const div = document.createElement('div');
-    div.className = `service-card ${s.c} fade-up`;
-    div.textContent = s.n;
-    div.onclick = () => applyFilter('service', s.q, `Сервис: ${s.n}`);
-    obs.observe(div);
-    sRow.appendChild(div);
-  });
+  setupDragScroll(gRow);
 }
 
 // ════════════════════════════════════════════════════════════════
 // ИСТОРИЯ
 // ════════════════════════════════════════════════════════════════
 
-function renderHistoryStrip() {
-  const sec  = byId('section-history');
-  const row  = byId('history-row');
-  const entries = Object.values(State.history)
-    .filter(e => e.currentTime > 5)
-    .sort((a, b) => (b.ts || 0) - (a.ts || 0))
-    .slice(0, 12);
-  if (!entries.length) { sec.classList.add('hidden'); return; }
-  sec.classList.remove('hidden');
-  row.innerHTML = '';
-  entries.forEach(e => row.appendChild(makeCard(e)));
-}
+
 
 function renderHistoryScreen() {
   const container = byId('history-full');
@@ -589,7 +676,7 @@ byId('btn-clear').addEventListener('click', () => {
   State.history = {};
   saveHist();
   renderHistoryScreen();
-  renderHistoryStrip();
+
 });
 
 function renderWatchlistScreen() {
@@ -984,6 +1071,9 @@ function launchKinobox() {
   const sourcesBar  = byId('player-sources');
 
   kbContainer.classList.remove('hidden');
+  setTimeout(() => {
+    kbContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
   
   // Проверяем есть ли источники от видеобалансеров
   const hasBalancerSources = movie.videoSources && movie.videoSources.length > 0;
@@ -1037,7 +1127,14 @@ function launchKinobox() {
     url: movie.url, title: movie.title, poster: movie.poster,
     info: movie.info || '', currentTime: 0, duration: 0
   });
-  renderHistoryStrip();
+
+  const closePlayerBtn = byId('btn-player-close');
+  if (closePlayerBtn) {
+    closePlayerBtn.onclick = () => {
+      kbContainer.classList.add('hidden');
+      if (playerDiv) playerDiv.innerHTML = '';
+    };
+  }
 }
 
 window.switchPlayerSource = function(index, isBalancer, balancerIdx = 0) {
@@ -1170,9 +1267,330 @@ function showToast(text) {
   setTimeout(() => toast.classList.add('hidden'), 3000);
 }
 
-(function init() {
-  renderHistoryStrip();
+function applySettingsUI() {
+  document.body.classList.toggle('light-theme', AppSettings.lightTheme);
+  document.body.classList.toggle('low-power-mode', AppSettings.lowPower);
+
+  const t = I18N[AppSettings.lang] || I18N.ru;
+
+  const btnFilmsSpan = document.querySelector('.tab-segment[data-type="films"] span');
+  const btnSeriesSpan = document.querySelector('.tab-segment[data-type="series"] span');
+  if (btnFilmsSpan) btnFilmsSpan.textContent = t.films;
+  if (btnSeriesSpan) btnSeriesSpan.textContent = t.series;
+
+  const titleSettings = byId('txt-settings-title') || byId('txt-settings-page-title');
+  if (titleSettings) titleSettings.textContent = t.settingsTitle;
+  const themeTitle = byId('lbl-theme-title');
+  if (themeTitle) themeTitle.textContent = t.themeTitle;
+  const themeSub = byId('lbl-theme-sub');
+  if (themeSub) themeSub.textContent = t.themeSub;
+  const langTitle = byId('lbl-lang-title');
+  if (langTitle) langTitle.textContent = t.langTitle;
+  const langSub = byId('lbl-lang-sub');
+  if (langSub) langSub.textContent = t.langSub;
+  const perfTitle = byId('lbl-perf-title');
+  if (perfTitle) perfTitle.textContent = t.perfTitle;
+  const perfSub = byId('lbl-perf-sub');
+  if (perfSub) perfSub.textContent = t.perfSub;
+  const searchInput = byId('search-input');
+  if (searchInput) searchInput.placeholder = t.searchPlaceholder;
+
+  const lblHome = byId('lbl-nav-home');
+  if (lblHome) lblHome.textContent = t.navHome;
+  const lblWatchlist = byId('lbl-nav-watchlist');
+  if (lblWatchlist) lblWatchlist.textContent = t.navWatchlist;
+  const lblHistory = byId('lbl-nav-history');
+  if (lblHistory) lblHistory.textContent = t.navHistory;
+  const lblSettings = byId('lbl-nav-settings');
+  if (lblSettings) lblSettings.textContent = t.navSettings;
+
   renderGenresAndServices();
+}
+
+function initSettingsEvents() {
+  const btnOpen = byId('btn-settings-open');
+  const btnClose = byId('btn-settings-close');
+  const overlay = byId('settings-overlay');
+  const toggleLight = byId('toggle-light-theme');
+  const selectLang = byId('select-lang');
+  const toggleLow = byId('toggle-low-power');
+
+  if (toggleLight) {
+    toggleLight.checked = AppSettings.lightTheme;
+    toggleLight.onchange = (e) => {
+      AppSettings.lightTheme = e.target.checked;
+      localStorage.setItem('cfg_light_theme', AppSettings.lightTheme);
+      applySettingsUI();
+    };
+  }
+
+  if (selectLang) {
+    selectLang.value = AppSettings.lang;
+    selectLang.onchange = (e) => {
+      AppSettings.lang = e.target.value;
+      localStorage.setItem('cfg_lang', AppSettings.lang);
+      applySettingsUI();
+    };
+  }
+
+  if (toggleLow) {
+    toggleLow.checked = AppSettings.lowPower;
+    toggleLow.onchange = (e) => {
+      AppSettings.lowPower = e.target.checked;
+      localStorage.setItem('cfg_low_power', AppSettings.lowPower);
+      applySettingsUI();
+    };
+  }
+
+  const btnReplayIntro = byId('btn-replay-intro');
+  if (btnReplayIntro) {
+    btnReplayIntro.onclick = () => {
+      sessionStorage.removeItem('cinegram_intro_seen');
+      const container = byId('cinegram-intro-container');
+      if (container) container.classList.remove('dismissed');
+      initCinegramIntro();
+      navigate('/');
+    };
+  }
+
+  const openSettings = (e) => {
+    if (e) e.stopPropagation();
+    if (!overlay) return;
+    overlay.classList.remove('hidden');
+    overlay.classList.add('active');
+  };
+
+  const closeSettings = () => {
+    if (!overlay) return;
+    overlay.classList.remove('active');
+    overlay.classList.add('hidden');
+  };
+
+  if (btnOpen) btnOpen.onclick = openSettings;
+  const btnBottomSettings = byId('btn-bottom-settings');
+  if (btnBottomSettings) btnBottomSettings.onclick = openSettings;
+  if (btnClose) btnClose.onclick = closeSettings;
+  if (overlay) {
+    overlay.onclick = (e) => {
+      if (e.target === overlay) closeSettings();
+    };
+  }
+}
+
+function initAutoPerformanceDetector() {
+  // Если пользователь сам вручную определил настройку — автовыбор не переопределяет ее
+  if (localStorage.getItem('cfg_low_power') !== null) return;
+
+  let frameCount = 0;
+  let startTime = performance.now();
+  let slowFrameCount = 0;
+  let hasAutoSwitched = false;
+
+  function measureFPS() {
+    if (hasAutoSwitched) return;
+
+    frameCount++;
+    const now = performance.now();
+    const elapsed = now - startTime;
+
+    if (elapsed >= 2000) { // Оценка FPS каждые 2 секунды
+      const currentFps = (frameCount * 1000) / elapsed;
+
+      if (currentFps < 22) { // Если ниже 22 FPS (медленный графический процессор или слабый ПК)
+        slowFrameCount++;
+        if (slowFrameCount >= 2) {
+          hasAutoSwitched = true;
+          AppSettings.lowPower = true;
+          applySettingsUI();
+          const toggleLow = byId('toggle-low-power');
+          if (toggleLow) toggleLow.checked = true;
+          
+          const msg = AppSettings.lang === 'en' 
+            ? '⚡ Low Power mode auto-enabled for smooth speed' 
+            : '⚡ Включен режим оптимизации для ускорения работы';
+          showToast(msg);
+          return;
+        }
+      } else {
+        slowFrameCount = 0;
+      }
+
+      frameCount = 0;
+      startTime = now;
+    }
+
+    requestAnimationFrame(measureFPS);
+  }
+
+  setTimeout(() => requestAnimationFrame(measureFPS), 1200);
+}
+
+function initCinegramIntro() {
+  const container    = byId('cinegram-intro-container');
+  const stage        = byId('intro-stage');
+  const preloader    = byId('intro-preloader');
+  const canvas       = byId('intro-matrix-canvas');
+  const premiumLabel = byId('intro-premium-label');
+  const logoWrap     = byId('intro-logo-wrap');
+  const taglineSpans = document.querySelectorAll('#intro-tagline span');
+  const skipBtn      = byId('intro-skip-btn');
+  const progressBar  = byId('intro-progress-bar');
+
+  if (!container) return;
+
+  // Если интро уже просмотрено в этой сессии — быстро скрываем
+  if (sessionStorage.getItem('cinegram_intro_seen') === 'true') {
+    container.classList.add('dismissed');
+    return;
+  }
+
+  // Matrix Rain Canvas для интро
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*+=<>?/\\абвгдежзийклмнопрстуфхцчшщ'.split('');
+    const fontSize = 16;
+    let columns = Math.floor(window.innerWidth / fontSize);
+    let drops = new Array(columns).fill(0).map(() => Math.random() * -window.innerHeight);
+
+    function resizeIntroMatrix() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      columns = Math.floor(canvas.width / fontSize);
+      drops = new Array(columns).fill(0).map(() => Math.random() * -canvas.height);
+    }
+    resizeIntroMatrix();
+    window.addEventListener('resize', resizeIntroMatrix);
+
+    function drawIntroMatrix() {
+      if (container.classList.contains('dismissed')) return;
+      ctx.fillStyle = 'rgba(5, 5, 5, 0.08)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.font = `${fontSize}px monospace`;
+      ctx.textAlign = 'center';
+
+      for (let i = 0; i < drops.length; i++) {
+        const ch = chars[Math.floor(Math.random() * chars.length)];
+        const x = i * fontSize + fontSize / 2;
+        const y = drops[i];
+
+        if (Math.random() > 0.975) {
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = '#ff1a1a';
+          ctx.shadowBlur = 12;
+        } else {
+          ctx.fillStyle = '#ff1a1a';
+          ctx.shadowColor = 'rgba(255, 26, 26, 0.6)';
+          ctx.shadowBlur = 8;
+        }
+        ctx.fillText(ch, x, y);
+        ctx.shadowBlur = 0;
+
+        if (y > canvas.height && Math.random() > 0.975) {
+          drops[i] = 0;
+        }
+        drops[i] += fontSize * 0.85;
+      }
+      requestAnimationFrame(drawIntroMatrix);
+    }
+    drawIntroMatrix();
+  }
+
+  const TIMINGS = {
+    preloaderOut: 400,
+    matrixOn: 600,
+    stage: 700,
+    label: 900,
+    logo: 1200,
+    glitch: 1700,
+    tagline: 2200,
+    taglineStep: 160,
+    finish: 4300
+  };
+
+  let progressStart = null;
+  function animateProgress(ts) {
+    if (!progressStart) progressStart = ts;
+    const elapsed = ts - progressStart;
+    const pct = Math.min(100, (elapsed / TIMINGS.finish) * 100);
+    if (progressBar) progressBar.style.width = pct + '%';
+    if (pct < 100 && !container.classList.contains('dismissed')) {
+      requestAnimationFrame(animateProgress);
+    }
+  }
+
+  function showGlitchBurst() {
+    if (!logoWrap) return;
+    logoWrap.classList.add('glitching');
+    setTimeout(() => logoWrap.classList.remove('glitching'), 200);
+    setTimeout(() => logoWrap.classList.add('glitching'), 300);
+    setTimeout(() => logoWrap.classList.remove('glitching'), 500);
+  }
+
+  function triggerSiteEntrance() {
+    // 1) Слайдер переключатель "Фильмы / Сериалы"
+    const tabsWrapper = document.querySelector('.tabs-wrapper');
+    if (tabsWrapper) {
+      tabsWrapper.classList.remove('intro-reveal-fade');
+      void tabsWrapper.offsetWidth;
+      tabsWrapper.classList.add('intro-reveal-fade');
+    }
+
+    // 2) Каскадное выплывание плашек жанров по очереди
+    const chips = document.querySelectorAll('#genres-row .genre-chip');
+    chips.forEach((chip, idx) => {
+      chip.classList.remove('intro-chip-cascade');
+      chip.style.animationDelay = `${idx * 70}ms`;
+      void chip.offsetWidth;
+      chip.classList.add('intro-chip-cascade');
+    });
+
+    // 3) Элементы главного экрана
+    const heroBanner = document.getElementById('hero');
+    if (heroBanner) {
+      heroBanner.classList.remove('intro-reveal-fade');
+      void heroBanner.offsetWidth;
+      heroBanner.classList.add('intro-reveal-fade');
+    }
+  }
+
+  function dismissIntro() {
+    sessionStorage.setItem('cinegram_intro_seen', 'true');
+    container.classList.add('dismissed');
+    triggerSiteEntrance();
+  }
+
+  function startIntroSequence() {
+    requestAnimationFrame(animateProgress);
+
+    setTimeout(() => preloader?.classList.add('hidden'), TIMINGS.preloaderOut);
+    setTimeout(() => canvas?.classList.add('active'), TIMINGS.matrixOn);
+    setTimeout(() => { if (stage) { stage.style.transition = 'opacity 0.8s ease'; stage.style.opacity = '1'; } }, TIMINGS.stage);
+    setTimeout(() => premiumLabel?.classList.add('show'), TIMINGS.label);
+    setTimeout(() => logoWrap?.classList.add('show'), TIMINGS.logo);
+    setTimeout(showGlitchBurst, TIMINGS.glitch);
+
+    taglineSpans.forEach((span, i) => {
+      setTimeout(() => span.classList.add('show'), TIMINGS.tagline + i * TIMINGS.taglineStep);
+    });
+
+    setTimeout(() => skipBtn?.classList.add('show'), 400);
+
+    // Автоматическое завершение интро
+    setTimeout(dismissIntro, TIMINGS.finish);
+  }
+
+  if (skipBtn) skipBtn.onclick = dismissIntro;
+  if (logoWrap) logoWrap.onclick = showGlitchBurst;
+
+  setTimeout(startIntroSequence, 200);
+}
+
+(function init() {
+
+  initCinegramIntro();
+  applySettingsUI();
+  initSettingsEvents();
+  initAutoPerformanceDetector();
   initSecretScreen();
   initFilters();
 

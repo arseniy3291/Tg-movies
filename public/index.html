@@ -17,12 +17,52 @@
   <title>CineGram</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link rel="preconnect" href="https://kinopoiskapiunofficial.tech"/>
+  <link rel="dns-prefetch" href="https://kinopoiskapiunofficial.tech"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
   
-  <link rel="stylesheet" href="/main.v11.css"/>
+  <link rel="stylesheet" href="/main.v20.css"/>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
+
+<!-- ════ CINEGRAM INTRO ANIMATION (OVERLAY) ══════════════════════ -->
+<div id="cinegram-intro-container">
+  <!-- Прелоадер -->
+  <div id="intro-preloader">
+    <div class="intro-preloader-text">Загрузка CineGram</div>
+  </div>
+
+  <!-- Матричный дождь -->
+  <canvas id="intro-matrix-canvas"></canvas>
+
+  <!-- Скан-линии (CRT эффект) -->
+  <div class="intro-scanlines"></div>
+
+  <!-- Виньетка -->
+  <div class="intro-vignette"></div>
+
+  <!-- Прогресс-бар -->
+  <div class="intro-progress-bar" id="intro-progress-bar"></div>
+
+  <!-- Кнопка пропуска -->
+  <button class="intro-skip-btn" id="intro-skip-btn" type="button">Пропустить ↪</button>
+
+  <!-- Основная сцена -->
+  <main class="intro-stage" id="intro-stage">
+    <div class="intro-premium-label" id="intro-premium-label">CineGram Premium</div>
+
+    <div class="intro-logo-wrap" id="intro-logo-wrap">
+      <h1 class="intro-logo" data-text="CineGram">CineGram</h1>
+    </div>
+
+    <div class="intro-tagline" id="intro-tagline">
+      <span>КИНО.</span>
+      <span>СЕРИАЛЫ.</span>
+      <span>СТРИМИНГ.</span>
+    </div>
+  </main>
+</div>
 
 <!-- ════ ГЛАВНАЯ ════════════════════════════════════════════════ -->
 <div id="screen-home" class="screen active">
@@ -39,6 +79,8 @@
       </button>
     </div>
   </header>
+
+
 
   <!-- Поисковый оверлей -->
   <div id="search-overlay" class="search-overlay hidden">
@@ -120,42 +162,30 @@
       </div>
     </section>
 
-    <!-- Вкладки -->
-    <div class="tabs-row">
-      <button class="tab active" data-type="films">Фильмы</button>
-      <button class="tab" data-type="series">Сериалы</button>
-      <button class="tab" data-type="cartoons">Мультфильмы</button>
+    <!-- Слайдер Переключатель Фильмы / Сериалы -->
+    <div class="tabs-wrapper">
+      <div class="modern-segmented-control" id="type-switcher" data-active-index="0">
+        <div class="segmented-indicator" id="segmented-indicator"></div>
+        <button class="tab-segment active" data-type="films">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19.82 2H4.18C2.97 2 2 2.97 2 4.18v15.64C2 21.03 2.97 22 4.18 22h15.64c1.21 0 2.18-.97 2.18-2.18V4.18C22 2.97 21.03 2 19.82 2zM7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg>
+          <span>Фильмы</span>
+        </button>
+        <button class="tab-segment" data-type="series">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>
+          <span>Сериалы</span>
+        </button>
+      </div>
     </div>
 
-    <!-- Продолжить просмотр -->
-    <section id="section-history" class="carousel-section hidden">
-      <div class="section-hdr">
-        <span class="section-title">Продолжить просмотр</span>
-      </div>
-      <div id="history-row" class="carousel-row"></div>
-    </section>
 
-    <!-- Стриминговые Сервисы -->
-    <section class="carousel-section">
-      <div class="section-hdr">
-        <span class="section-title">Стриминги</span>
-      </div>
-      <div id="services-row" class="carousel-row services-row"></div>
-    </section>
 
     <!-- Жанры -->
     <section class="carousel-section">
-      <div class="section-hdr">
-        <span class="section-title">Жанры</span>
-      </div>
       <div id="genres-row" class="carousel-row chips-row"></div>
     </section>
 
     <!-- Новинки -->
     <section class="carousel-section">
-      <div class="section-hdr">
-        <span class="section-title">Популярное</span>
-      </div>
       <div id="popular-grid" class="card-grid"></div>
     </section>
 
@@ -254,60 +284,88 @@
   </main>
 </div>
 
+<!-- ════ НАСТРОЙКИ ══════════════════════════════════════════════ -->
+<div id="screen-settings" class="screen hidden">
+  <header class="header">
+    <div class="header-logo"><span class="logo-name" id="txt-settings-page-title">Настройки</span></div>
+  </header>
+  <main class="home-scroll" style="padding-top: 16px;">
+    <div class="settings-container">
+      
+      <!-- Белая / Светлая тема -->
+      <div class="setting-card">
+        <div class="setting-icon">☀️</div>
+        <div class="setting-text">
+          <span class="setting-title" id="lbl-theme-title">Светлая тема</span>
+          <span class="setting-sub" id="lbl-theme-sub">Белая цветовая палитра</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-light-theme"/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- Язык интерфейса -->
+      <div class="setting-card">
+        <div class="setting-icon">🌐</div>
+        <div class="setting-text">
+          <span class="setting-title" id="lbl-lang-title">Язык / Language</span>
+          <span class="setting-sub" id="lbl-lang-sub">Английский / Русский</span>
+        </div>
+        <select id="select-lang" class="settings-select">
+          <option value="ru">Русский</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+
+      <!-- Режим для слабых ПК -->
+      <div class="setting-card">
+        <div class="setting-icon">⚡</div>
+        <div class="setting-text">
+          <span class="setting-title" id="lbl-perf-title">Режим для слабых ПК</span>
+          <span class="setting-sub" id="lbl-perf-sub">Без матрицы и тяжелых эффектов</span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-low-power"/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- Посмотреть интро заново -->
+      <div class="setting-card" id="btn-replay-intro" style="cursor: pointer;">
+        <div class="setting-icon">🎬</div>
+        <div class="setting-text">
+          <span class="setting-title" id="lbl-intro-title">Посмотреть интро</span>
+          <span class="setting-sub" id="lbl-intro-sub">Воспроизвести стартовую анимацию</span>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="color: var(--text-muted);"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+
+    </div>
+  </main>
+</div>
+
 <!-- ════ НИЖНЯЯ НАВИГАЦИЯ ═══════════════════════════════════════ -->
 <nav id="bottom-nav" class="bottom-nav">
   <button class="nav-btn active" data-screen="home">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-    <span>Главная</span>
+    <span id="lbl-nav-home">Главная</span>
   </button>
   <button class="nav-btn" data-screen="watchlist">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-    <span>Мой список</span>
+    <span id="lbl-nav-watchlist">Мой список</span>
   </button>
   <button class="nav-btn" data-screen="history">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-    <span>История</span>
+    <span id="lbl-nav-history">История</span>
   </button>
-  <button class="nav-btn" data-screen="faq">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-    <span>FAQ</span>
+  <button class="nav-btn" data-screen="settings" id="btn-bottom-settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <span id="lbl-nav-settings">Настройки</span>
   </button>
 </nav>
 
-<!-- ════ FAQ ═══════════════════════════════════════════════════ -->
-<div id="screen-faq" class="screen hidden">
-  <header class="header">
-    <div class="header-logo"><span class="logo-name">FAQ</span></div>
-  </header>
-  <main class="home-scroll" style="padding-top:0">
-    <div class="faq-container">
-      <div class="faq-item">
-        <h3 class="faq-q">❓ Что такое CineGram?</h3>
-        <p class="faq-a">CineGram — это ваш персональный каталог фильмов и сериалов. Мы собираем актуальные данные из Кинопоиска и предоставляем удобный доступ к информации о кино.</p>
-      </div>
-      <div class="faq-item">
-        <h3 class="faq-q">🎬 Как смотреть фильмы?</h3>
-        <p class="faq-a">Откройте любой фильм и нажмите кнопку «Смотреть». Наш плеер автоматически найдёт доступные источники для просмотра.</p>
-      </div>
-      <div class="faq-item">
-        <h3 class="faq-q">📌 Как работают закладки?</h3>
-        <p class="faq-a">Нажмите на значок закладки на карточке фильма или внутри страницы фильма, чтобы добавить его в «Мой список». Список сохраняется в вашем браузере.</p>
-      </div>
-      <div class="faq-item">
-        <h3 class="faq-q">🌓 Как переключить тему?</h3>
-        <p class="faq-a">Нажмите на иконку солнца/луны в правом верхнем углу, чтобы переключиться между тёмной и светлой темой.</p>
-      </div>
-      <div class="faq-item">
-        <h3 class="faq-q">📡 Какие стриминги поддерживаются?</h3>
-        <p class="faq-a">Мы поддерживаем Netflix, HBO Max, Apple TV+, Amazon Prime, Кинопоиск и Амедиатеку. Каталоги пополняются бесконечной прокруткой.</p>
-      </div>
-      <div class="faq-item">
-        <h3 class="faq-q">💡 Откуда берутся данные?</h3>
-        <p class="faq-a">Все рейтинги, описания и постеры берутся из официального API Кинопоиска. Мы не храним никакого контента на своих серверах.</p>
-      </div>
-    </div>
-  </main>
-</div>
+
 
 <!-- ════ СЕКРЕТНЫЙ БЕСТИАРИЙ ════════════════════════════════════ -->
 <div id="screen-secret" class="screen hidden">
@@ -332,6 +390,6 @@
   </main>
 </div>
 
-<script src="/core.v11.js"></script>
+<script src="/core.v20.js"></script>
 </body>
 </html>

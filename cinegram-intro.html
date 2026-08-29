@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CineGram Premium — Intro Animation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* ===================================================================
+     CineGram Premium — Intro Animation
+     Киберпанк-неон стиль: чёрный фон, красное свечение, matrix-дождь
+     =================================================================== */
+
+  :root {
+    --bg:           #050505;
+    --bg-deep:      #020202;
+    --accent:       #ff1a1a;
+    --accent-soft:  #ff4d4d;
+    --accent-glow:  rgba(255, 26, 26, 0.55);
+    --text:         #f5f5f5;
+    --text-muted:   #b8b8b8;
+    --chip-bg:      #14141f;
+    --chip-border:  rgba(255, 255, 255, 0.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    cursor: default;
+  }
+
+  /* ---------- Матричный дождь на фоне (canvas) ---------- */
+  #matrix-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 1.5s ease-out;
+    filter: blur(0.4px);
+  }
+  #matrix-canvas.active { opacity: 1; }
+
+  /* Лёгкая красная виньетка по краям для глубины */
+  .vignette {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.65) 85%, rgba(0,0,0,0.95) 100%),
+      radial-gradient(ellipse at center, rgba(255,26,26,0.06) 0%, transparent 50%);
+  }
+
+  /* ---------- Прелоадер (первая секунда) ---------- */
+  #preloader {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: var(--bg-deep);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.8s ease-out;
+  }
+  #preloader.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .preloader-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.4em;
+    color: var(--accent);
+    text-transform: uppercase;
+    animation: pulse 1.2s ease-in-out infinite;
+    text-shadow: 0 0 12px var(--accent-glow);
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 1; }
+  }
+
+  /* ---------- Основной контейнер ---------- */
+  .stage {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 24px;
+    opacity: 0;
+  }
+
+  /* ---------- Верхний лейбл ---------- */
+  .premium-label {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.45em;
+    color: var(--accent-soft);
+    text-transform: uppercase;
+    margin-bottom: 48px;
+    opacity: 0;
+    transform: translateY(-12px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+  .premium-label.show {
+    opacity: 0.75;
+    transform: translateY(0);
+  }
+
+  /* ---------- Логотип ---------- */
+  .logo-wrap {
+    position: relative;
+    margin-bottom: 18px;
+    opacity: 0;
+    transform: scale(1.15);
+    transition: opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 1.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .logo-wrap.show {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .logo {
+    font-size: clamp(56px, 13vw, 180px);
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+    color: var(--accent);
+    text-shadow:
+      0 0 20px var(--accent-glow),
+      0 0 40px rgba(255, 26, 26, 0.4),
+      0 0 80px rgba(255, 26, 26, 0.25);
+    position: relative;
+    user-select: none;
+  }
+
+  /* Glitch-эффект: два псевдо-элемента с RGB-сдвигом */
+  .logo::before,
+  .logo::after {
+    content: attr(data-text);
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .logo::before {
+    color: #00fff2;
+    mix-blend-mode: screen;
+    transform: translateX(-4px);
+    clip-path: inset(0 0 0 0);
+    animation: glitch-x 3s infinite steps(1);
+    opacity: 0;
+  }
+  .logo::after {
+    color: #ff00ff;
+    mix-blend-mode: screen;
+    transform: translateX(4px);
+    clip-path: inset(0 0 0 0);
+    animation: glitch-y 3.6s infinite steps(1);
+    opacity: 0;
+  }
+  .logo-wrap.glitching .logo::before,
+  .logo-wrap.glitching .logo::after {
+    opacity: 0.85;
+  }
+  .logo-wrap.glitching .logo {
+    animation: logo-jitter 0.18s steps(2) 3;
+  }
+  @keyframes glitch-x {
+    0%   { clip-path: inset(20% 0 60% 0); transform: translateX(-5px); }
+    20%  { clip-path: inset(60% 0 10% 0); transform: translateX(3px); }
+    40%  { clip-path: inset(40% 0 40% 0); transform: translateX(-2px); }
+    60%  { clip-path: inset(80% 0 5% 0);  transform: translateX(4px); }
+    80%  { clip-path: inset(10% 0 75% 0); transform: translateX(-3px); }
+    100% { clip-path: inset(50% 0 30% 0); transform: translateX(0); }
+  }
+  @keyframes glitch-y {
+    0%   { clip-path: inset(70% 0 10% 0); transform: translateX(4px); }
+    25%  { clip-path: inset(20% 0 50% 0); transform: translateX(-3px); }
+    50%  { clip-path: inset(40% 0 30% 0); transform: translateX(2px); }
+    75%  { clip-path: inset(10% 0 70% 0); transform: translateX(-4px); }
+    100% { clip-path: inset(55% 0 25% 0); transform: translateX(0); }
+  }
+  @keyframes logo-jitter {
+    0%, 100% { transform: translate(0, 0); }
+    50%      { transform: translate(2px, -1px); }
+  }
+
+  /* ---------- Тэглайн ---------- */
+  .tagline {
+    font-size: clamp(13px, 1.6vw, 20px);
+    font-weight: 700;
+    letter-spacing: 0.5em;
+    color: var(--accent-soft);
+    text-transform: uppercase;
+    margin-bottom: 56px;
+    margin-left: 0.5em; /* компенсация letter-spacing */
+    display: flex;
+    gap: 0.8em;
+  }
+  .tagline span {
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  .tagline span.show {
+    opacity: 0.85;
+    transform: translateY(0);
+  }
+
+  /* ---------- Переключатель (segmented control) ---------- */
+  .tabs {
+    display: flex;
+    background: rgba(20, 20, 31, 0.6);
+    border: 1px solid var(--chip-border);
+    border-radius: 999px;
+    padding: 6px;
+    margin-bottom: 28px;
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+    position: relative;
+  }
+  .tabs.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.3s ease, background 0.3s ease;
+    user-select: none;
+    z-index: 1;
+  }
+  .tab svg { width: 16px; height: 16px; }
+  .tab.active {
+    color: #fff;
+    background: linear-gradient(135deg, #ff1a1a 0%, #cc0000 100%);
+    box-shadow:
+      0 0 18px rgba(255, 26, 26, 0.45),
+      inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .tab:not(.active):hover { color: #fff; }
+
+  /* ---------- Жанровые чипы ---------- */
+  .genres {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    max-width: 720px;
+  }
+  .chip {
+    padding: 9px 18px;
+    background: var(--chip-bg);
+    border: 1px solid var(--chip-border);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(18px) scale(0.95);
+    transition: opacity 0.5s ease,
+                transform 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.25s ease,
+                box-shadow 0.25s ease;
+  }
+  .chip.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  .chip:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 14px rgba(255, 26, 26, 0.35);
+  }
+
+  /* ---------- Декоративные скан-линии поверх ---------- */
+  .scanlines {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.015) 0px,
+      rgba(255, 255, 255, 0.015) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode: overlay;
+    opacity: 0.6;
+  }
+
+  /* ---------- Прогресс-бар снизу (опционально) ---------- */
+  .progress-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-soft));
+    box-shadow: 0 0 10px var(--accent-glow);
+    z-index: 60;
+    transition: width 0.2s linear;
+  }
+
+  /* ---------- Адаптив ---------- */
+  @media (max-width: 640px) {
+    .premium-label { font-size: 11px; margin-bottom: 32px; }
+    .tagline { letter-spacing: 0.35em; gap: 0.6em; margin-bottom: 40px; }
+    .tab { padding: 8px 16px; font-size: 13px; }
+    .chip { padding: 8px 14px; font-size: 12px; }
+  }
+
+  /* ---------- Утилита для пропуска анимации ---------- */
+  .skip-btn {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 80;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.4s ease, color 0.2s ease, border-color 0.2s ease;
+    backdrop-filter: blur(6px);
+  }
+  .skip-btn.show { opacity: 0.7; }
+  .skip-btn:hover {
+    color: #fff;
+    border-color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+  <!-- Прелоадер (показывается первым, потом исчезает) -->
+  <div id="preloader">
+    <div class="preloader-text">Загрузка CineGram</div>
+  </div>
+
+  <!-- Матричный дождь -->
+  <canvas id="matrix-canvas"></canvas>
+
+  <!-- Скан-линии (CRT эффект) -->
+  <div class="scanlines"></div>
+
+  <!-- Виньетка -->
+  <div class="vignette"></div>
+
+  <!-- Прогресс-бар -->
+  <div class="progress-bar" id="progress-bar"></div>
+
+  <!-- Кнопка пропуска -->
+  <button class="skip-btn" id="skip-btn" type="button">Пропустить ↪</button>
+
+  <!-- Основная сцена -->
+  <main class="stage" id="stage">
+
+    <div class="premium-label" id="premium-label">CineGram Premium</div>
+
+    <div class="logo-wrap" id="logo-wrap">
+      <h1 class="logo" data-text="CineGram">CineGram</h1>
+    </div>
+
+    <div class="tagline" id="tagline">
+      <span>КИНО.</span>
+      <span>СЕРИАЛЫ.</span>
+      <span>СТРИМИНГ.</span>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <div class="tab active">
+        <!-- иконка плёнки -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
+          <line x1="7" y1="2" x2="7" y2="22"></line>
+          <line x1="17" y1="2" x2="17" y2="22"></line>
+          <line x1="2" y1="12" x2="22" y2="12"></line>
+          <line x1="2" y1="7" x2="7" y2="7"></line>
+          <line x1="2" y1="17" x2="7" y2="17"></line>
+          <line x1="17" y1="17" x2="22" y2="17"></line>
+          <line x1="17" y1="7" x2="22" y2="7"></line>
+        </svg>
+        Фильмы
+      </div>
+      <div class="tab">
+        <!-- иконка ТВ -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
+          <polyline points="17 2 12 7 7 2"></polyline>
+        </svg>
+        Сериалы
+      </div>
+    </div>
+
+    <div class="genres" id="genres">
+      <div class="chip">ТРИЛЛЕР</div>
+      <div class="chip">ДРАМА</div>
+      <div class="chip">КРИМИНАЛ</div>
+      <div class="chip">МЕЛОДРАМА</div>
+      <div class="chip">ФАНТАСТИКА</div>
+      <div class="chip">БОЕВИК</div>
+    </div>
+
+  </main>
+
+<script>
+/* =====================================================================
+   1. MATRIX RAIN — красный цифровой дождь на canvas
+   ===================================================================== */
+(function initMatrix() {
+  const canvas = document.getElementById('matrix-canvas');
+  const ctx = canvas.getContext('2d');
+
+  // Символы для дождя: латиница, цифры, кириллица, спецсимволы
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*+=<>?/\\абвгдежзийклмнопрстуфхцчшщ';
+  const charArr = chars.split('');
+  let fontSize = 16;
+  let columns = 0;
+  let drops = [];
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    columns = Math.floor(canvas.width / fontSize);
+    drops = new Array(columns).fill(0).map(() => Math.random() * -canvas.height);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  let frameCount = 0;
+  function draw() {
+    // Лёгкое затемнение прошлого кадра для эффекта шлейфа
+    ctx.fillStyle = 'rgba(5, 5, 5, 0.08)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
+    ctx.textAlign = 'center';
+
+    for (let i = 0; i < drops.length; i++) {
+      const ch = charArr[Math.floor(Math.random() * charArr.length)];
+      const x = i * fontSize + fontSize / 2;
+      const y = drops[i];
+
+      // Голова капли — ярко-белая с красным ореолом
+      if (Math.random() > 0.975) {
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#ff1a1a';
+        ctx.shadowBlur = 12;
+      } else {
+        ctx.fillStyle = '#ff1a1a';
+        ctx.shadowColor = 'rgba(255, 26, 26, 0.6)';
+        ctx.shadowBlur = 8;
+      }
+      ctx.fillText(ch, x, y);
+      ctx.shadowBlur = 0;
+
+      // Сброс или продвижение
+      if (y > canvas.height && Math.random() > 0.975) {
+        drops[i] = 0;
+      }
+      drops[i] += fontSize * 0.85;
+    }
+    frameCount++;
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+
+/* =====================================================================
+   2. INTRO SEQUENCE — последовательное появление элементов
+   ===================================================================== */
+(function introSequence() {
+  const stage          = document.getElementById('stage');
+  const preloader      = document.getElementById('preloader');
+  const canvas         = document.getElementById('matrix-canvas');
+  const premiumLabel   = document.getElementById('premium-label');
+  const logoWrap       = document.getElementById('logo-wrap');
+  const taglineSpans   = document.querySelectorAll('#tagline span');
+  const tabs           = document.getElementById('tabs');
+  const chips          = document.querySelectorAll('.chip');
+  const skipBtn        = document.getElementById('skip-btn');
+  const progressBar    = document.getElementById('progress-bar');
+
+  const TIMINGS = {
+    preloaderOut: 700,   // скрытие прелоадера
+    matrixOn:    900,   // включение дождя
+    stage:       1000,  // появление сцены
+    label:       1300,  // верхний лейбл
+    logo:        1600,  // логотип
+    glitch:      2200,  // glitch-вспышка на логотипе
+    tagline:     2800,  // тэглайн (каскад)
+    taglineStep: 180,   // задержка между словами тэглайна
+    tabs:        3800,  // переключатель
+    chips:       4300,  // первый чип
+    chipStep:    90,    // задержка между чипами
+  };
+
+  // Прогресс-бар: анимируем до 100% за общую длительность интро
+  const totalDuration = TIMINGS.chips + (chips.length * TIMINGS.chipStep) + 600 - TIMINGS.matrixOn;
+  let progressStart = null;
+
+  function animateProgress(ts) {
+    if (!progressStart) progressStart = ts;
+    const elapsed = ts - progressStart;
+    const pct = Math.min(100, (elapsed / totalDuration) * 100);
+    progressBar.style.width = pct + '%';
+    if (pct < 100) requestAnimationFrame(animateProgress);
+    else {
+      setTimeout(() => {
+        progressBar.style.opacity = '0';
+        progressBar.style.transition = 'opacity 0.6s ease';
+      }, 300);
+    }
+  }
+
+  function showGlitchBurst() {
+    logoWrap.classList.add('glitching');
+    // Короткая серия glitch-вспышек
+    setTimeout(() => logoWrap.classList.remove('glitching'), 220);
+    setTimeout(() => logoWrap.classList.add('glitching'),    320);
+    setTimeout(() => logoWrap.classList.remove('glitching'), 520);
+  }
+
+  function startIntro() {
+    requestAnimationFrame(animateProgress);
+
+    // 1) Скрыть прелоадер
+    setTimeout(() => {
+      preloader.classList.add('hidden');
+    }, TIMINGS.preloaderOut);
+
+    // 2) Включить матричный дождь
+    setTimeout(() => {
+      canvas.classList.add('active');
+    }, TIMINGS.matrixOn);
+
+    // 3) Появление сцены
+    setTimeout(() => {
+      stage.style.transition = 'opacity 0.8s ease';
+      stage.style.opacity = '1';
+    }, TIMINGS.stage);
+
+    // 4) Верхний лейбл
+    setTimeout(() => premiumLabel.classList.add('show'), TIMINGS.label);
+
+    // 5) Логотип
+    setTimeout(() => {
+      logoWrap.classList.add('show');
+    }, TIMINGS.logo);
+
+    // 6) Glitch-вспышка
+    setTimeout(showGlitchBurst, TIMINGS.glitch);
+
+    // 7) Тэглайн — каскад
+    taglineSpans.forEach((span, i) => {
+      setTimeout(() => span.classList.add('show'),
+        TIMINGS.tagline + i * TIMINGS.taglineStep);
+    });
+
+    // 8) Переключатель
+    setTimeout(() => tabs.classList.add('show'), TIMINGS.tabs);
+
+    // 9) Жанровые чипы — каскад
+    chips.forEach((chip, i) => {
+      setTimeout(() => chip.classList.add('show'),
+        TIMINGS.chips + i * TIMINGS.chipStep);
+    });
+
+    // 10) Кнопка пропуска появляется сразу (на случай если юзер торопится)
+    setTimeout(() => skipBtn.classList.add('show'), 400);
+  }
+
+  /* ---- Логика пропуска ---- */
+  function skipIntro() {
+    // Моментально показываем все элементы
+    [
+      premiumLabel, logoWrap, tabs
+    ].forEach(el => el.classList.add('show'));
+    taglineSpans.forEach(s => s.classList.add('show'));
+    chips.forEach(c => c.classList.add('show'));
+    stage.style.transition = 'opacity 0.3s ease';
+    stage.style.opacity = '1';
+    preloader.classList.add('hidden');
+    canvas.classList.add('active');
+    progressBar.style.width = '100%';
+    skipBtn.classList.remove('show');
+    setTimeout(() => skipBtn.style.display = 'none', 200);
+  }
+  skipBtn.addEventListener('click', skipIntro);
+
+  // Стартуем после небольшой задержки, чтобы шрифт успел подгрузиться
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => setTimeout(startIntro, 200));
+  } else {
+    setTimeout(startIntro, 400);
+  }
+
+  /* ---- Бонус: лёгкая интерактивность ---- */
+  // Переключение табов
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+    });
+  });
+
+  // Чипы: при клике — пульс красного свечения
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chip.style.boxShadow = '0 0 24px rgba(255,26,26,0.8)';
+      chip.style.borderColor = '#ff1a1a';
+      setTimeout(() => {
+        chip.style.boxShadow = '';
+        chip.style.borderColor = '';
+      }, 400);
+    });
+  });
+
+  // Логотип: клик = повторить glitch-вспышку
+  logoWrap.addEventListener('click', showGlitchBurst);
+})();
+</script>
+</body>
+</html>

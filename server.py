@@ -56,8 +56,35 @@ def kp_fetch(url_path):
         return json.loads(resp.read().decode('utf-8'))
 
 
-def map_card(item):
-    """Map Kinopoisk item to our card format."""
+def is_real_rating(val):
+    """Checks if the rating value is a real number (not a dash, None, or null)."""
+    if not val:
+        return False
+    s = str(val).strip()
+    if s in ('', 'None', 'null', '—', '-', '0.0', '0'):
+        return False
+    try:
+        # Check if it's a percentage (e.g. "98%")
+        if s.endswith('%'):
+            return False # ratingAwait is usually percentage, which means unreleased
+        float(s)
+        return True
+    except ValueError:
+        return False
+
+
+def map_card(item, exclude_unreleased=False):
+    """Map Kinopoisk item to our card format. If exclude_unreleased is True, returns None for movies without a rating."""
+    # Check if movie has any real rating
+    kp_rating = item.get('ratingKinopoisk') or item.get('rating')
+    imdb_rating = item.get('ratingImdb')
+    
+    has_real_rating = is_real_rating(kp_rating) or is_real_rating(imdb_rating)
+    
+    # If we are filtering and there's no real rating, skip it
+    if exclude_unreleased and not has_real_rating:
+        return None
+
     raw_poster = item.get('posterUrlPreview') or item.get('posterUrl') or ''
     if not raw_poster or 'no-poster.png' in raw_poster:
         return None
@@ -179,7 +206,7 @@ class CineGramHandler(http.server.SimpleHTTPRequestHandler):
             kp_path = f"/api/v2.2/films/collections?type=TOP_POPULAR_MOVIES&page={page}"
 
         data = kp_fetch(kp_path)
-        items = [map_card(i) for i in data.get('items', [])]
+        items = [map_card(i, exclude_unreleased=True) for i in data.get('items', [])]
         self.send_json([i for i in items if i])
 
     # ─── Search ──────────────────────────────────────────────
@@ -218,7 +245,7 @@ class CineGramHandler(http.server.SimpleHTTPRequestHandler):
         genre = query.get('genre', [''])[0]
         page = query.get('page', ['1'])[0]
         data = kp_fetch(f"/api/v2.2/films?genres={urllib.parse.quote(genre)}&order=RATING&type=ALL&ratingFrom=7&page={page}")
-        items = [map_card(i) for i in data.get('items', [])]
+        items = [map_card(i, exclude_unreleased=True) for i in data.get('items', [])]
         self.send_json([i for i in items if i])
 
     # ─── Movie Detail ────────────────────────────────────────
@@ -241,8 +268,40 @@ class CineGramHandler(http.server.SimpleHTTPRequestHandler):
         except:
             pass
 
+        # Fetch video sources
+        sources = []
+        kp_id = str(data.get('kinopoiskId'))
+        title = data.get('nameRu') or data.get('nameOriginal') or ''
+        year = str(data.get('year', ''))
+
+        if kp_id:
+            sources.append({
+                'source': 'alloha',
+                'name': 'Источник 1 (Alloha)',
+                'url': f"https://alloha.tv/player/index.php?kp={kp_id}"
+            })
+            sources.append({
+                'source': 'bazon',
+                'name': 'Источник 2 (Bazon)',
+                'url': f"https://bazon.cc/video/embed/kp/{kp_id}"
+            })
+            sources.append({
+                'source': 'kinohub',
+                'name': 'Источник 3 (Mirror)',
+                'url': f"https://on.kinohub.vip/embed/kp/{kp_id}",
+                'clipped': True
+            })
+
+        if title:
+            q = urllib.parse.quote(f"{title} {year}".strip())
+            sources.append({
+                'source': 'videocdn',
+                'name': 'Источник 4 (CDN)',
+                'url': f"https://videocdn.tv/api/embed/movie?title={q}"
+            })
+
         self.send_json({
-            'id': str(data.get('kinopoiskId')),
+            'id': kp_id,
             'title': data.get('nameRu') or data.get('nameOriginal') or 'Без названия',
             'description': data.get('description') or data.get('shortDescription') or 'Нет описания',
             'poster': f"/api/image?url={urllib.parse.quote(data.get('posterUrl', ''))}" if data.get('posterUrl') else '',
@@ -253,6 +312,8 @@ class CineGramHandler(http.server.SimpleHTTPRequestHandler):
             'length': f"{data.get('filmLength')} мин." if data.get('filmLength') else '',
             'directors': ", ".join(filter(None, directors)),
             'actors': ", ".join(filter(None, actors)),
+            'imdbId': data.get('imdbId', ''),
+            'videoSources': sources,
             'url': url_str
         })
 

@@ -5,7 +5,7 @@ const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
 
 // ══════════════════════════════════════════════════════════════
-// ASCII HERO BANNER — Matrix Rain with Mouse Glow
+// ASCII HERO BANNER — Matrix Rain with Mouse Glow & Observer Pause
 // ══════════════════════════════════════════════════════════════
 (function initAsciiBanner() {
   const banner = document.getElementById('hero');
@@ -15,21 +15,20 @@ if (tg) { tg.ready(); tg.expand(); }
   const ctx = canvas.getContext('2d');
   const chars = '░▒▓█▀▄▌▐│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*';
   
-  // PERFORMANCE: High clarity (1.0 scale) and bigger letters
   const resScale = 1.0;
   const fontSize = 20; 
   let columns = [];
   let mouse = { x: -1000, y: -1000 };
   const glowRadius = 240;
   
-  // PERFORMANCE FIX: FPS Throttling
   let lastTime = 0;
   const fps = 30;
   const interval = 1000 / fps;
+  let isCanvasVisible = true;
+  let animFrameId = null;
 
   function resize() {
     const rect = banner.getBoundingClientRect();
-    // Set internal resolution lower than actual size
     canvas.width = rect.width * resScale;
     canvas.height = rect.height * 1.4 * resScale;
     initColumns();
@@ -37,10 +36,8 @@ if (tg) { tg.ready(); tg.expand(); }
 
   function initColumns() {
     columns = [];
-    // Balanced density: slightly closer than default
     const colCount = Math.floor(canvas.width / (fontSize * 0.85)); 
     for (let i = 0; i < colCount; i++) {
-      // Balanced drops: 3-6 per column
       const dropCount = 3 + Math.floor(Math.random() * 4);
       for (let d = 0; d < dropCount; d++) {
         columns.push({
@@ -55,9 +52,12 @@ if (tg) { tg.ready(); tg.expand(); }
   }
 
   function draw(timestamp) {
-    requestAnimationFrame(draw);
+    if (!isCanvasVisible) {
+      animFrameId = null;
+      return;
+    }
+    animFrameId = requestAnimationFrame(draw);
     
-    // FPS THROTTLE
     const delta = timestamp - lastTime;
     if (delta < interval) return;
     lastTime = timestamp - (delta % interval);
@@ -108,6 +108,19 @@ if (tg) { tg.ready(); tg.expand(); }
     }
   }
 
+  // Pause loop when off-screen for 0% CPU/GPU overhead
+  const bannerObs = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      isCanvasVisible = entry.isIntersecting;
+      if (isCanvasVisible && !animFrameId) {
+        lastTime = performance.now();
+        animFrameId = requestAnimationFrame(draw);
+      }
+    });
+  }, { threshold: 0.01 });
+
+  bannerObs.observe(banner);
+
   banner.addEventListener('mousemove', (e) => {
     const rect = banner.getBoundingClientRect();
     mouse.x = e.clientX - rect.left;
@@ -124,7 +137,7 @@ if (tg) { tg.ready(); tg.expand(); }
   resize();
   ctx.fillStyle = 'rgb(8, 8, 8)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  requestAnimationFrame(draw);
+  animFrameId = requestAnimationFrame(draw);
 })();
 
 // ── История ───────────────────────────────────────────────────
@@ -152,7 +165,6 @@ function toggleWatch(movie) {
   }
   saveWatch();
   renderWatchlistScreen();
-    // Update movie screen if active
   if (State.screen === 'movie' && State.currentMovie?.id === movie.id) {
     updateWatchBtn(movie);
   }
@@ -237,10 +249,15 @@ const AppSettings = {
 };
 
 const GENRES = [
-  { id: 1, n: 'Триллер' }, { id: 2, n: 'Драма' },
-  { id: 3, n: 'Криминал' }, { id: 4, n: 'Мелодрама' },
-  { id: 6, n: 'Фантастика' }, { id: 11, n: 'Боевик' },
-  { id: 13, n: 'Комедия' }, { id: 17, n: 'Ужасы' }
+  { id: 1, n: 'Триллер', c: 'genre-thriller' },
+  { id: 2, n: 'Драма', c: 'genre-drama' },
+  { id: 3, n: 'Криминал', c: 'genre-crime' },
+  { id: 4, n: 'Мелодрама', c: 'genre-romance' },
+  { id: 6, n: 'Фантастика', c: 'genre-scifi' },
+  { id: 11, n: 'Боевик', c: 'genre-action' },
+  { id: 13, n: 'Комедия', c: 'genre-comedy' },
+  { id: 17, n: 'Ужасы', c: 'genre-horror' },
+  { id: 12, n: 'Приключения', c: 'genre-adventure' }
 ];
 
 const SERVICES = [
@@ -254,7 +271,6 @@ const SERVICES = [
 
 // ── DOM ───────────────────────────────────────────────────────
 const byId = id => document.getElementById(id);
-
 
 const Screens = {
   home:      byId('screen-home'),
@@ -280,7 +296,6 @@ function showScreen(name, updateUrl = false) {
   State.screen = name;
   if (name === 'home') renderGenresAndServices();
   
-  // Dynamic Title
   let docTitle = 'CineGram';
   if (name === 'history') docTitle = 'История | CineGram';
   else if (name === 'watchlist') docTitle = 'Мой список | CineGram';
@@ -314,20 +329,20 @@ async function handleRoute() {
   const path = window.location.pathname;
   const params = new URLSearchParams(window.location.search);
 
-  // Close search if open
   if (!path.startsWith('/search')) closeSearch();
 
-  if (path === '/' || path === '/films') {
+  if (path === '/' || path === '/popular' || path === '/films') {
     const q = params.get('q');
     if (q) {
-      State.activeTab = 'films';
+      State.activeTab = 'popular';
       updateTabsUI();
       showScreen('home');
       byId('search-input').value = q;
       performSearch(q);
     } else {
-      State.activeTab = 'films';
+      State.activeTab = (path === '/films') ? 'films' : 'popular';
       updateTabsUI();
+      updateSectionTitle();
       showScreen('home');
       loadPopular(true);
     }
@@ -335,6 +350,7 @@ async function handleRoute() {
   else if (path === '/series') {
     State.activeTab = 'series';
     updateTabsUI();
+    updateSectionTitle();
     showScreen('home');
     loadPopular(true);
   }
@@ -343,7 +359,6 @@ async function handleRoute() {
   }
   else if (path.startsWith('/movie/')) {
     const id = path.split('/').pop();
-    // Пытаемся найти данные о фильме в истории или закладках для мгновенного показа
     const saved = [...Object.values(State.history), ...State.watchlist].find(m => m.id === id);
     if (saved) {
       openMovieDetail(saved);
@@ -366,7 +381,6 @@ async function handleRoute() {
     openSecretScreen();
   }
   else {
-    // 404 or default
     navigate('/');
   }
 }
@@ -389,7 +403,7 @@ function updateGenreButtonsUI() {
   });
 }
 
-window.addEventListener('popstate', (e) => {
+window.addEventListener('popstate', () => {
   handleRoute();
 });
 
@@ -405,7 +419,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 
 
 // ════════════════════════════════════════════════════════════════
-// КАРТОЧКИ
+// КАРТОЧКИ С ОПТИМИЗАЦИЕЙ (Async decoding & lazy load)
 // ════════════════════════════════════════════════════════════════
 
 const obs = new IntersectionObserver(entries => {
@@ -415,7 +429,7 @@ const obs = new IntersectionObserver(entries => {
       obs.unobserve(e.target);
     }
   });
-}, { rootMargin: '50px', threshold: 0.05 });
+}, { rootMargin: '100px', threshold: 0.05 });
 
 function makeCard(movie) {
   const hist     = State.history[movie.url] || null;
@@ -458,7 +472,6 @@ function makeCard(movie) {
   watchBtn.onclick = (e) => {
     e.stopPropagation();
     toggleWatch(movie);
-    // Refresh card icon
     const nowIn = State.watchlist.some(m => m.id === movie.id);
     watchBtn.classList.toggle('active', nowIn);
     watchBtn.innerHTML = nowIn
@@ -471,18 +484,18 @@ function makeCard(movie) {
 }
 
 function shimmers(container, n = 6) {
+  const frag = document.createDocumentFragment();
   container.innerHTML = '';
   for (let i = 0; i < n; i++) {
     const d = document.createElement('div');
     d.className = 'shimmer';
-    container.appendChild(d);
+    frag.appendChild(d);
   }
+  container.appendChild(frag);
 }
 
-
-
 // ════════════════════════════════════════════════════════════════
-// ГЛАВНАЯ — КАТАЛОГ
+// ГЛАВНАЯ — КАТАЛОГ (DocumentFragment Batching & Fast SWR)
 // ════════════════════════════════════════════════════════════════
 
 const popularGrid = byId('popular-grid');
@@ -507,10 +520,7 @@ async function loadPopular(reset = false) {
     }
 
     const data = await api(endpoint);
-    if (reset) {
-      popularGrid.innerHTML = '';
-      if (data.length > 0) { /* hero is now ASCII banner, no dynamic movie hero */ }
-    }
+    if (reset) popularGrid.innerHTML = '';
 
     const unique = data.filter(m => {
       if (State.renderedIds.has(m.id)) return false;
@@ -529,36 +539,8 @@ async function loadPopular(reset = false) {
   }
 }
 
-function updateHero(movie) {
-  const hBg = byId('hero-bg');
-  const hTitle = byId('hero-title');
-  const hInfo = byId('hero-info');
-  const hPlay = byId('hero-play');
-  const hWatch = byId('hero-watchlist-toggle');
-
-  if (!movie) return;
-  hBg.style.backgroundImage = `url('${movie.poster}')`;
-  hTitle.textContent = movie.title;
-  hInfo.textContent = movie.info || '';
-  
-  hPlay.onclick = () => openMovieDetail(movie, true);
-  
-  const inWatch = State.watchlist.some(m => m.id === movie.id);
-  hWatch.innerHTML = inWatch 
-    ? `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`
-    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>`;
-  
-  hWatch.onclick = (e) => {
-    e.stopPropagation();
-    toggleWatch(movie);
-    updateHero(movie);
-  };
-}
-
 homeScroll.addEventListener('scroll', () => {
   if (isLoading || State.screen !== 'home') return;
-  
-  // Throttled check: only run if close to the bottom
   if (homeScroll.scrollTop + homeScroll.clientHeight >= homeScroll.scrollHeight - 600) {
     loadPopular(false);
   }
@@ -567,8 +549,12 @@ homeScroll.addEventListener('scroll', () => {
 document.querySelectorAll('.tab-segment').forEach(btn => {
   btn.addEventListener('click', () => {
     const type = btn.dataset.type;
-    const path = type === 'films' ? '/' : `/${type}`;
-    navigate(path);
+    State.activeTab = type;
+    updateTabsUI();
+    updateSectionTitle();
+    const path = type === 'popular' ? '/' : `/${type}`;
+    window.history.pushState({ screen: 'home', tab: type }, '', path);
+    loadPopular(true);
   });
 });
 
@@ -652,13 +638,15 @@ function renderHistoryScreen() {
   container.innerHTML = '';
   if (!entries.length) { empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
+
+  const frag = document.createDocumentFragment();
   entries.forEach(e => {
     const pct = e.duration ? (e.currentTime / e.duration) * 100 : 0;
     const div = document.createElement('div');
     div.className = 'hist-item';
     div.innerHTML = `
       ${e.poster
-        ? `<img src="${e.poster}" alt="">`
+        ? `<img src="${e.poster}" decoding="async" alt="">`
         : '<div style="width:56px;aspect-ratio:2/3;background:var(--bg3);border-radius:8px;flex-shrink:0"></div>'}
       <div class="hist-info">
         <div class="hist-name">${e.title || '—'}</div>
@@ -667,8 +655,9 @@ function renderHistoryScreen() {
       </div>
     `;
     div.addEventListener('click', () => openMovieDetail(e));
-    container.appendChild(div);
+    frag.appendChild(div);
   });
+  container.appendChild(frag);
 }
 
 byId('btn-clear').addEventListener('click', () => {
@@ -688,11 +677,13 @@ function renderWatchlistScreen() {
     return; 
   }
   empty.classList.add('hidden');
-  State.watchlist.forEach(m => container.appendChild(makeCard(m)));
+  const frag = document.createDocumentFragment();
+  State.watchlist.forEach(m => frag.appendChild(makeCard(m)));
+  container.appendChild(frag);
 }
 
 // ════════════════════════════════════════════════════════════════
-// ПОИСК
+// ПОИСК — Оптимизированная задержка (200ms debounce)
 // ════════════════════════════════════════════════════════════════
 
 const searchOverlay = byId('search-overlay');
@@ -715,7 +706,6 @@ function closeSearch() {
   searchOverlay.classList.remove('active');
   searchOverlay.classList.add('closing');
   
-  // Wait for animations (approx 600ms) before truly hiding
   setTimeout(() => {
     if (searchOverlay.classList.contains('closing')) {
       searchOverlay.classList.add('hidden');
@@ -743,31 +733,27 @@ searchInput.addEventListener('input', () => {
     return; 
   }
   
-  // Instant feedback
   viewport.classList.remove('hidden');
   searchLoader.classList.remove('hidden');
   searchGrid.innerHTML = '';
   searchEmpty.classList.add('hidden');
 
-  // Sync search to URL without adding history entry
   const newUrl = q ? `/?q=${encodeURIComponent(q)}` : '/';
   window.history.replaceState({ screen: 'home' }, '', newUrl);
 
-  searchTimer = setTimeout(() => doSearch(q), 500);
+  // Fast 200ms debounce
+  searchTimer = setTimeout(() => doSearch(q), 200);
 });
 
-// Фильтры
 byId('btn-search-settings').addEventListener('click', () => {
   byId('search-filters').classList.toggle('hidden');
 });
 
-// Кнопка поиска
 byId('btn-search-trigger').addEventListener('click', () => {
   doSearch(searchInput.value.trim());
 });
 
 function initFilters() {
-  // ЖАНРЫ
   document.querySelectorAll('#filter-genres .f-chip').forEach(btn => {
     btn.onclick = () => {
       const g = btn.dataset.genre;
@@ -777,7 +763,6 @@ function initFilters() {
     };
   });
 
-  // ГОДЫ (RANGE SLIDER)
   const minInput = byId('year-min');
   const maxInput = byId('year-max');
   if (minInput && maxInput) {
@@ -786,7 +771,6 @@ function initFilters() {
       let v2 = parseInt(maxInput.value);
       
       if (v1 > v2) {
-        // Запрещаем пересечение
         const temp = v1;
         v1 = v2;
         v2 = temp;
@@ -799,8 +783,6 @@ function initFilters() {
     minInput.oninput = sync;
     maxInput.oninput = sync;
     
-    // Поиск только при отпускании (change) или с дебаунсом (мы используем doSearch внутри sync с дебаунсом в самом doSearch обычно)
-    // Но для слайдера лучше вызвать doSearch по окончании перетаскивания
     minInput.onchange = () => doSearch(searchInput.value.trim());
     maxInput.onchange = () => doSearch(searchInput.value.trim());
   }
@@ -846,13 +828,11 @@ function resetFilters() {
   updateFilterUI();
 }
 
-
 async function doSearch(q) {
   const viewport = byId('search-results-viewport');
   const genre = State.filters.genre;
   const year  = State.filters.year;
 
-  // Если ничего не введено и фильтры пустые - очищаем и скрываем
   if (!q && !genre && !year) {
      searchGrid.innerHTML = '';
      searchLoader.classList.add('hidden');
@@ -861,7 +841,6 @@ async function doSearch(q) {
      return;
   }
 
-  // Подготовка UI: показываем контейнер и лоадер
   viewport.classList.remove('hidden');
   searchLoader.classList.remove('hidden');
   searchEmpty.classList.add('hidden');
@@ -877,7 +856,6 @@ async function doSearch(q) {
       return; 
     }
 
-    // Категоризация
     const first = data[0];
     const others = data.slice(1, 6);
 
@@ -901,11 +879,13 @@ function renderSearchGroup(title, items) {
   header.textContent = title;
   searchGrid.appendChild(header);
 
+  const frag = document.createDocumentFragment();
   items.forEach(m => {
     const item = makeSearchItem(m);
     item.addEventListener('click', () => { closeSearch(); openMovieDetail(m); });
-    searchGrid.appendChild(item);
+    frag.appendChild(item);
   });
+  searchGrid.appendChild(frag);
 }
 
 function makeSearchItem(m) {
@@ -915,13 +895,12 @@ function makeSearchItem(m) {
   const rtg = parseFloat(m.rating) || 0;
   const rtgClass = rtg >= 7 ? 'high' : rtg >= 4 ? 'mid' : 'low';
   
-  // Split info (Year, Genre)
   const metaParts = m.info.split(', ');
   const year = metaParts[0] || '';
   const secondary = metaParts.slice(1).join(', ') || '';
 
   div.innerHTML = `
-    <img src="${m.poster}" class="s-item-img" alt="" onerror="this.src='https://via.placeholder.com/44x64?text=?'">
+    <img src="${m.poster}" class="s-item-img" decoding="async" alt="" onerror="this.src='https://via.placeholder.com/44x64?text=?'">
     <div class="s-item-info">
       <div class="s-item-title">${m.title}</div>
       <div class="s-item-meta">
@@ -946,7 +925,6 @@ async function openMovieDetail(movie, autoPlay = false, updateUrl = false) {
     window.history.pushState({ id: movie.id }, '', movie.url);
   }
 
-  // Сразу показываем базовые данные
   byId('movie-title').textContent = movie.title || '';
   byId('movie-sub').textContent   = '';
   byId('movie-genre').textContent = '';
@@ -963,7 +941,6 @@ async function openMovieDetail(movie, autoPlay = false, updateUrl = false) {
   
   byId('movie-loader').classList.remove('hidden');
 
-  // Скрываем Kinobox пока не выбрали "Смотреть"
   const kbContainer = byId('kinobox-container');
   kbContainer.classList.add('hidden');
   kbContainer.querySelector('.kinobox_player').innerHTML = '';
@@ -999,7 +976,6 @@ async function openMovieDetail(movie, autoPlay = false, updateUrl = false) {
 
     updateWatchBtn(State.currentMovie);
 
-    // Автозапуск плеера (при нажатии "Смотреть" на Hero)
     if (autoPlay) launchKinobox();
 
   } catch (err) {
@@ -1010,7 +986,6 @@ async function openMovieDetail(movie, autoPlay = false, updateUrl = false) {
   }
 }
 
-// Кнопка назад
 byId('btn-back').addEventListener('click', () => {
   if (searchOverlay.classList.contains('active')) {
     closeSearch();
@@ -1019,19 +994,11 @@ byId('btn-back').addEventListener('click', () => {
   navigate('/');
 });
 
-// Кнопка Избранное
 byId('btn-watchlist').addEventListener('click', () => {
   if (State.currentMovie) toggleWatch(State.currentMovie);
 });
 
-// ════════════════════════════════════════════════════════════════
-// KINOBOX ПЛЕЕР
-// ════════════════════════════════════════════════════════════════
-
-// Кнопка "Смотреть" на странице фильма — появляется через CSS
-// Мы добавим её в HTML динамически, чтобы не зависеть от удалённых элементов.
 (function injectPlayBtn() {
-  // Если кнопки ещё нет — создадим её
   if (byId('btn-play')) return;
   const btn = document.createElement('button');
   btn.id = 'btn-play';
@@ -1039,7 +1006,6 @@ byId('btn-watchlist').addEventListener('click', () => {
   btn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Смотреть`;
   btn.addEventListener('click', launchKinobox);
 
-  // Вставляем до movie-loader
   const loader = byId('movie-loader');
   loader.parentNode.insertBefore(btn, loader);
 })();
@@ -1067,7 +1033,6 @@ function launchKinobox() {
   if (!movie) return;
 
   const kbContainer = byId('kinobox-container');
-  const playerDiv   = kbContainer.querySelector('.kinobox_player');
   const sourcesBar  = byId('player-sources');
 
   kbContainer.classList.remove('hidden');
@@ -1109,12 +1074,10 @@ function launchKinobox() {
   // Initial Load
   loadMirror(playerState.currentMirrorIndex, playerState.useBalancers, playerState.balancerIndex);
 
-  // Smooth scroll to player
   setTimeout(() => {
     kbContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, 100);
 
-  // Progress & History
   if (State.playerProgressInterval) clearInterval(State.playerProgressInterval);
   State.playerProgressInterval = setInterval(() => {
       upsertHist({
@@ -1142,7 +1105,6 @@ window.switchPlayerSource = function(index, isBalancer, balancerIdx = 0) {
   playerState.useBalancers = isBalancer;
   playerState.balancerIndex = balancerIdx;
   
-  // Update buttons
   const btns = document.querySelectorAll('.source-btn');
   btns.forEach((btn, idx) => btn.classList.toggle('active', idx === index));
   
@@ -1192,13 +1154,28 @@ function loadMirror(index, isBalancer = false, balancerIdx = 0) {
 }
 
 // ════════════════════════════════════════════════════════════════
-// API HELPERS
+// API HELPERS (Client-side SWR Cache)
 // ════════════════════════════════════════════════════════════════
 
-async function api(endpoint) {
+const clientCache = new Map();
+
+async function api(endpoint, useCache = true) {
+  if (useCache && clientCache.has(endpoint)) {
+    const cachedItem = clientCache.get(endpoint);
+    // Background revalidation if older than 30s
+    if (Date.now() - cachedItem.ts > 30000) {
+      fetch(endpoint).then(r => r.ok ? r.json() : null).then(fresh => {
+        if (fresh) clientCache.set(endpoint, { data: fresh, ts: Date.now() });
+      }).catch(() => {});
+    }
+    return cachedItem.data;
+  }
+
   const r = await fetch(endpoint);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
+  const data = await r.json();
+  clientCache.set(endpoint, { data, ts: Date.now() });
+  return data;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1238,25 +1215,27 @@ function initSecretScreen() {
 function openSecretScreen() {
   renderSecretScreen();
   showScreen('secret');
-  byId('bottom-nav').style.display = 'none'; // Полный иммерсив
+  byId('bottom-nav').style.display = 'none';
 }
 
 function renderSecretScreen() {
   const grid = byId('secret-grid');
   grid.innerHTML = '';
+  const frag = document.createDocumentFragment();
   SEC_ANIMALS.forEach(a => {
     const div = document.createElement('div');
     div.className = 'secret-item fade-up';
     div.innerHTML = `
-      <img src="${a.i}" alt="${a.n}" loading="lazy">
+      <img src="${a.i}" alt="${a.n}" decoding="async" loading="lazy">
       <div class="secret-info">
         <div class="secret-name">🇮🇹 ${a.n}</div>
         <div class="secret-desc">${a.d}</div>
       </div>
     `;
-    grid.appendChild(div);
+    frag.appendChild(div);
     obs.observe(div);
   });
+  grid.appendChild(frag);
 }
 
 function showToast(text) {
@@ -1594,7 +1573,6 @@ function initCinegramIntro() {
   initSecretScreen();
   initFilters();
 
-  // Клик по логотипу — на главную
   const logo = document.querySelector('.header-logo');
   if (logo) {
     logo.style.cursor = 'pointer';
@@ -1603,5 +1581,3 @@ function initCinegramIntro() {
 
   handleRoute(); 
 })();
-
-

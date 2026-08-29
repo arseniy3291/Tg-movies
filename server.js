@@ -8,7 +8,6 @@ const zlib = require('zlib');
 
 const app = express();
 const PORT = 3000;
-// Открытый тестовый ключ неофициального API Кинопоиска
 const KP_KEY = '8c8e1a50-6322-4135-8875-5d40a5420d86';
 
 // ── Встроенная сжатие Gzip для минимального размера передаваемых данных ──
@@ -77,12 +76,12 @@ function mapCard(item) {
   const title = item.nameRu || item.nameOriginal || item.nameEn || 'Без названия';
   const poster = `/api/image?url=${encodeURIComponent(rawPoster)}`;
   const info = [item.year, item.genres?.map(g => g.genre).slice(0, 2).join(', ')].filter(Boolean).join(', ');
-  
+
   let rawRating = item.ratingKinopoisk || item.rating || item.ratingImdb || item.ratingAwait || '';
   if (typeof rawRating === 'string' && rawRating.endsWith('%')) {
     rawRating = (parseFloat(rawRating) / 10).toFixed(1);
   }
-  
+
   let ratingDisplay = '';
   if (rawRating) {
     const rNum = parseFloat(rawRating);
@@ -146,6 +145,19 @@ app.get('/api/image', async (req, res) => {
   }
 });
 
+const GENRE_MAP = {
+  '1': 'триллер',
+  '2': 'драма',
+  '3': 'криминал',
+  '4': 'мелодрама',
+  '6': 'фантастика',
+  '11': 'боевик',
+  '12': 'приключения',
+  '13': 'комедия',
+  '17': 'ужасы',
+  '18': 'мультфильм'
+};
+
 app.get('/api/popular', async (req, res) => {
   try {
     const type = req.query.type || 'films';
@@ -156,10 +168,11 @@ app.get('/api/popular', async (req, res) => {
       kpPath = `/api/v2.2/films/collections?type=TOP_250_TV_SHOWS&page=${page}`;
     }
 
-    const data = await kpFetch(kpPath);
-    res.json((data.items || []).map(mapCard).filter(Boolean));
-  } catch(e) {
-    res.status(500).json({error: 'Ошибка загрузки каталога'});
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.json(items.map(mapCard).filter(Boolean));
+  } catch (e) {
+    console.error('[popular error]', e.message);
+    res.status(500).json({ error: 'Ошибка загрузки каталога' });
   }
 });
 
@@ -169,7 +182,7 @@ app.get('/api/search', async (req, res) => {
     const genre = req.query.genre || '';
     const year = req.query.year || '';
     const page = parseInt(req.query.page) || 1;
-    
+
     if (!q && !genre && !year) return res.json([]);
 
     const CURATED = {
@@ -183,14 +196,14 @@ app.get('/api/search', async (req, res) => {
 
     let curatedCards = [];
     if (!genre && !year && q && CURATED[q] && page === 1) {
-      const curRequests = CURATED[q].map(id => kpFetch(`/api/v2.2/films/${id}`).catch(() => null));
+      const curRequests = CURATED[q].map(id => kpFetch(`/api/v2.2/films/${id}`, 60 * 60 * 1000).catch(() => null));
       const curatedData = await Promise.all(curRequests);
       curatedCards = curatedData.filter(Boolean).map(mapCard).filter(Boolean);
     }
 
     let kwCards = [];
     if (!genre && !year && q) {
-      const kwData = await kpFetch(`/api/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(q)}&page=${page}`);
+      const kwData = await kpFetch(`/api/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(q)}&page=${page}`, 5 * 60 * 1000);
       kwCards = (kwData.films || []).map(mapCard).filter(Boolean);
     } else {
       let kpUrl = `/api/v2.2/films?page=${page}`;
@@ -204,13 +217,14 @@ app.get('/api/search', async (req, res) => {
           kpUrl += `&yearFrom=${year}&yearTo=${year}`;
         }
       }
-      const data = await kpFetch(kpUrl);
+      const data = await kpFetch(kpUrl, 5 * 60 * 1000);
       kwCards = (data.items || []).map(mapCard).filter(Boolean);
     }
 
+    res.setHeader('Cache-Control', 'public, max-age=180');
     res.json([...curatedCards, ...kwCards]);
-  } catch(e) {
-    res.status(500).json({error: 'Ошибка поиска'});
+  } catch (e) {
+    res.status(500).json({ error: 'Ошибка поиска' });
   }
 });
 
@@ -228,8 +242,8 @@ app.get('/api/discover', async (req, res) => {
 
     const data = await kpFetch(kpUrl);
     res.json((data.items || []).map(mapCard).filter(Boolean));
-  } catch(e) {
-    res.status(500).json({error: 'Ошибка поиска жанров'});
+  } catch (e) {
+    res.status(500).json({ error: 'Ошибка поиска жанров' });
   }
 });
 
@@ -237,11 +251,11 @@ app.get('/api/movie', async (req, res) => {
   try {
     const urlStr = req.query.url || '';
     const id = urlStr.split('/').pop();
-    if (!id) return res.status(400).json({error: 'Неверный URL'});
+    if (!id) return res.status(400).json({ error: 'Неверный URL' });
 
     const [data, staffData] = await Promise.all([
-      kpFetch(`/api/v2.2/films/${id}`),
-      kpFetch(`/api/v1/staff?filmId=${id}`).catch(() => [])
+      kpFetch(`/api/v2.2/films/${id}`, 60 * 60 * 1000),
+      kpFetch(`/api/v1/staff?filmId=${id}`, 60 * 60 * 1000).catch(() => [])
     ]);
 
     let directors = [];
@@ -250,7 +264,8 @@ app.get('/api/movie', async (req, res) => {
       directors = staffData.filter(s => s.professionKey === 'DIRECTOR').slice(0, 2).map(s => s.nameRu || s.nameEn);
       actors = staffData.filter(s => s.professionKey === 'ACTOR').slice(0, 6).map(s => s.nameRu || s.nameEn);
     }
-    
+
+    res.setHeader('Cache-Control', 'public, max-age=600');
     res.json({
       id: String(data.kinopoiskId),
       title: data.nameRu || data.nameOriginal || 'Без названия',
@@ -266,9 +281,9 @@ app.get('/api/movie', async (req, res) => {
       url: urlStr,
       videoSources: []
     });
-  } catch(e) {
+  } catch (e) {
     console.error(`[movie] Error fetching ID ${req.query.url}:`, e.message);
-    res.status(500).json({error: 'Ошибка загрузки фильма', details: e.message});
+    res.status(500).json({ error: 'Ошибка загрузки фильма', details: e.message });
   }
 });
 
@@ -300,7 +315,6 @@ app.get('/api/video-sources', async (req, res) => {
 });
 
 // ── Поддержка SPA маршрутизации ───────────────────────────────
-// Все запросы, которые не попали в API или статику, отдают index.html
 app.get('/*all', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });

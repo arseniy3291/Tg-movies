@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 120" width="600" height="120">
+  <defs>
+    <filter id="glow" x="-20%" y="-50%" width="140%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="gramGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#E50914"/>
+      <stop offset="100%" stop-color="#FF1A1A"/>
+    </linearGradient>
+  </defs>
+  <!-- Aperture Emblem -->
+  <g transform="translate(10,10)" filter="url(#glow)">
+    <circle cx="50" cy="50" r="42" stroke="#E50914" stroke-width="3" fill="none" opacity="0.9"/>
+    <circle cx="50" cy="50" r="42" stroke="#00FFF2" stroke-width="1" fill="none" opacity="0.3" transform="rotate(45 50 50)"/>
+    <path d="M50 8C26.8 8 8 26.8 8 50s18.8 42 42 42" stroke="#E50914" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <path d="M50 14C30.1 14 14 30.1 14 50s16.1 36 36 36" stroke="#FF1A1A" stroke-width="2" fill="none" opacity="0.5"/>
+    <path d="M50 20L35 35L50 50L65 35Z" fill="#E50914" opacity="0.3"/>
+    <path d="M50 80L35 65L50 50L65 65Z" fill="#E50914" opacity="0.3"/>
+    <path d="M20 50L35 35L50 50L35 65Z" fill="#E50914" opacity="0.3"/>
+    <circle cx="50" cy="50" r="14" fill="#E50914" opacity="0.15"/>
+    <path d="M44 42L60 50L44 58V42Z" fill="#FFFFFF"/>
+    <circle cx="50" cy="50" r="46" stroke="#E50914" stroke-width="0.5" fill="none" opacity="0.2"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="110" y="78" font-family="'Inter','Outfit','Helvetica Neue',sans-serif" font-weight="900" font-size="64" letter-spacing="-2">
+    <tspan fill="#FFFFFF">Cine</tspan><tspan fill="url(#gramGrad)">Gram</tspan>
+  </text>
+</svg>

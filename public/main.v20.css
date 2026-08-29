@@ -122,29 +122,63 @@ a {
 }
 
 .header-logo {
+.header-logo {
   display: flex;
   align-items: center;
   gap: 10px;
+  cursor: pointer;
 }
 
-.logo-mark {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 900;
-  font-size: 20px;
-  color: #fff;
-  box-shadow: 0 4px 12px var(--accent-glow);
+.header-logo-icon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  filter: drop-shadow(0 0 10px rgba(229, 9, 20, 0.5));
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.header-logo:hover .header-logo-icon {
+  transform: rotate(15deg) scale(1.08);
 }
 
 .logo-name {
-  font-size: 20px;
-  font-weight: 800;
+  font-size: 21px;
+  font-weight: 900;
   letter-spacing: -0.5px;
+  color: #ffffff;
+}
+
+.logo-name-red,
+.splash-title-red {
+  color: var(--accent);
+}
+
+.intro-logo-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.intro-logo-icon {
+  flex-shrink: 0;
+  width: 76px;
+  height: 76px;
+  filter: drop-shadow(0 0 18px rgba(229, 9, 20, 0.7));
+}
+
+.splash-logo-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.splash-logo-icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  filter: drop-shadow(0 0 14px rgba(229, 9, 20, 0.6));
 }
 
 .hdr-icon-btn {

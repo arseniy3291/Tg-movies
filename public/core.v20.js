@@ -1023,9 +1023,10 @@ byId('btn-play')?.addEventListener('click', launchKinobox);
 // ════════════════════════════════════════════════════════════════
 
 const MIRRORS = [
-  { id: 'alloha', name: 'Источник 1 (Чистый)', url: (id) => `https://alloha.tv/player/index.php?kp=${id}`, type: 'pure' },
-  { id: 'bazon',  name: 'Источник 2 (Bazon)',   url: (id) => `https://bazon.cc/video/embed/kp/${id}`,      type: 'pure' },
-  { id: 'khub',   name: 'Источник 3 (Mirror)',  url: (id) => `https://on.kinohub.vip/embed/kp/${id}`,      type: 'clipped' }
+  { id: 'alloha',  name: 'Источник 1 (Alloha)',  url: (id) => `https://alloha.tv/player/index.php?kp=${id}`, type: 'pure' },
+  { id: 'vidsrc',  name: 'Источник 2 (VidSrc)',  url: (id) => `https://vidsrc.me/embed/movie?kp=${id}`,      type: 'pure' },
+  { id: 'kinobox', name: 'Источник 3 (Kinobox)', url: (id) => `https://kinobox.in/player?kp=${id}`,         type: 'pure' },
+  { id: 'khub',    name: 'Источник 4 (Kinohub)', url: (id) => `https://on.kinohub.vip/embed/kp/${id}`,      type: 'clipped' }
 ];
 
 let playerState = {

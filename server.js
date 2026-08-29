@@ -306,8 +306,21 @@ app.get('/api/video-sources', async (req, res) => {
     }
     
     if (kpId && sources.length === 0) {
-      const kpSources = await balancers.searchByKinopoiskId(kpId);
-      sources.push(...kpSources);
+      try {
+        const kpSources = await balancers.searchByKinopoiskId(kpId);
+        if (kpSources && kpSources.length > 0) sources.push(...kpSources);
+      } catch (e) {}
+    }
+
+    if (kpId) {
+      const fallbackList = [
+        { name: 'Alloha HD', url: `https://alloha.tv/player/index.php?kp=${kpId}`, source: 'alloha' },
+        { name: 'Voidboost HD', url: `https://voidboost.net/embed/${kpId}`, source: 'voidboost' },
+        { name: 'VidSrc Player', url: `https://vidsrc.me/embed/movie?kp=${kpId}`, source: 'vidsrc' }
+      ];
+      fallbackList.forEach(fb => {
+        if (!sources.some(s => s.url === fb.url)) sources.push(fb);
+      });
     }
     
     res.json({ sources });

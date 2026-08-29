@@ -331,30 +331,31 @@ async function handleRoute() {
 
   if (!path.startsWith('/search')) closeSearch();
 
-  if (path === '/' || path === '/popular' || path === '/films') {
+  if (path === '/' || path === '/films') {
     const q = params.get('q');
     if (q) {
-      State.activeTab = 'popular';
       updateTabsUI();
       showScreen('home');
       byId('search-input').value = q;
       performSearch(q);
     } else {
-      State.activeTab = (path === '/films') ? 'films' : 'popular';
+      State.activeTab = 'films';
+      State.selectedGenre = '';
+      State.selectedGenreName = '';
       updateTabsUI();
-      updateSectionTitle();
       showScreen('home');
       loadPopular(true);
     }
   } 
   else if (path === '/series') {
     State.activeTab = 'series';
+    State.selectedGenre = '';
+    State.selectedGenreName = '';
     updateTabsUI();
-    updateSectionTitle();
     showScreen('home');
     loadPopular(true);
   }
-  else if (path === '/cartoons') {
+  else if (path === '/cartoons' || path === '/popular') {
     navigate('/');
   }
   else if (path.startsWith('/movie/')) {
@@ -512,9 +513,12 @@ async function loadPopular(reset = false) {
   isLoading = true;
 
   try {
-    let endpoint = `/api/popular?type=${State.activeTab}&page=${State.page}`;
+    // Нормализация типа — допустимы только 'films' и 'series'
+    const tab = (State.activeTab === 'series') ? 'series' : 'films';
+
+    let endpoint = `/api/popular?type=${tab}&page=${State.page}`;
     if (State.selectedGenre) {
-      endpoint = `/api/discover?type=${State.activeTab}&genre=${State.selectedGenre}&page=${State.page}`;
+      endpoint = `/api/discover?type=${tab}&genre=${State.selectedGenre}&page=${State.page}`;
     } else if (State.filterMode === 'service') {
       endpoint = `/api/search?q=${State.filterValue}&page=${State.page}`;
     }
@@ -550,9 +554,11 @@ document.querySelectorAll('.tab-segment').forEach(btn => {
   btn.addEventListener('click', () => {
     const type = btn.dataset.type;
     State.activeTab = type;
+    State.selectedGenre = '';
+    State.selectedGenreName = '';
     updateTabsUI();
-    updateSectionTitle();
-    const path = type === 'popular' ? '/' : `/${type}`;
+    updateGenreButtonsUI();
+    const path = type === 'films' ? '/' : `/${type}`;
     window.history.pushState({ screen: 'home', tab: type }, '', path);
     loadPopular(true);
   });
@@ -567,7 +573,7 @@ function toggleGenreFilter(genreId, genreName) {
     State.selectedGenreName = genreName;
   }
 
-  updateTabsUI();
+  updateGenreButtonsUI();
   loadPopular(true);
 }
 

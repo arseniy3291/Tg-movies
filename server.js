@@ -161,13 +161,16 @@ const GENRE_MAP = {
 app.get('/api/popular', async (req, res) => {
   try {
     const type = req.query.type || 'films';
-    const page = req.query.page || 1;
+    const page = parseInt(req.query.page) || 1;
     let kpPath = `/api/v2.2/films/collections?type=TOP_POPULAR_MOVIES&page=${page}`;
     
     if (type === 'series') {
       kpPath = `/api/v2.2/films/collections?type=TOP_250_TV_SHOWS&page=${page}`;
     }
 
+    const data = await kpFetch(kpPath);
+    const items = data.items || [];
+    
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.json(items.map(mapCard).filter(Boolean));
   } catch (e) {

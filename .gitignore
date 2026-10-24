@@ -4,3 +4,9 @@ scratch/
 Tg-movies/
 .env
 *.log
+.venv
+.venv/
+.crawl4ai/
+__pycache__/
+mint-golem-mod
+*.jar

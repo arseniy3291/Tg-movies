@@ -22,9 +22,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
   
   <link rel="icon" type="image/svg+xml" href="/cinegram-icon.svg"/>
-  <link rel="stylesheet" href="/main.v20.css?v=4"/>
+  <link rel="stylesheet" href="/main.v20.css?v=kp6"/>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="https://kinobox.tv/kinobox.min.js"></script>
 </head>
 <body>
 
@@ -112,19 +111,22 @@
             <button class="f-chip" data-genre="17">Ужасы</button>
             <button class="f-chip" data-genre="6">Фантастика</button>
             <button class="f-chip" data-genre="1">Триллер</button>
+            <button class="f-chip" data-genre="12">Приключения</button>
+            <button class="f-chip" data-genre="3">Криминал</button>
+            <button class="f-chip" data-genre="4">Мелодрама</button>
             <button class="f-chip" data-genre="18">Мультфильм</button>
           </div>
         </div>
         <div class="filter-section">
           <div class="filter-header-row">
             <div class="filter-label">Год выпуска</div>
-            <div id="year-range-display" class="year-display">1960 — 2024</div>
+            <div id="year-range-display" class="year-display">Все годы</div>
           </div>
           <div class="range-slider-container">
             <div class="range-track"></div>
             <div id="range-mask" class="range-mask"></div>
-            <input type="range" id="year-min" min="1940" max="2024" value="1960" class="input-range">
-            <input type="range" id="year-max" min="1940" max="2024" value="2024" class="input-range">
+            <input type="range" id="year-min" min="1940" max="2026" value="1960" class="input-range">
+            <input type="range" id="year-max" min="1940" max="2026" value="2026" class="input-range">
           </div>
         </div>
         <button id="btn-filter-reset" class="filter-reset-btn">Сбросить все</button>
@@ -391,6 +393,6 @@
   </main>
 </div>
 
-<script src="/core.v20.js"></script>
+<script src="/core.v20.js?v=kp6"></script>
 </body>
 </html>

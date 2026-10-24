@@ -3359,3 +3359,45 @@ body.low-power-mode *::after {
     font-size: 14px !important;
   }
 }
+
+/* Kinopoisk & IMDb rating badges and Top-250 chip */
+.movie-rating-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.imdb-badge.kp-badge {
+  background: linear-gradient(135deg, #ff5500, #e50914);
+  color: #fff;
+  border: none;
+  font-weight: 700;
+}
+.s-item-rtg.imdb {
+  background: rgba(245, 197, 24, 0.16);
+  color: #f5c518;
+  border: 1px solid rgba(245, 197, 24, 0.35);
+}
+.card-rtg.rtg-high .star-icon {
+  color: #34d399;
+}
+.card-rtg.rtg-mid .star-icon {
+  color: #fbbf24;
+}
+.genre-chip.chip-top-rating {
+  border-color: rgba(245, 197, 24, 0.45);
+}
+.genre-chip.chip-top-rating.active {
+  background: linear-gradient(135deg, #f59e0b, #e50914);
+  border-color: transparent;
+  color: #fff;
+}
+.player-sources-bar {
+  flex-wrap: wrap;
+}
+a.source-btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+

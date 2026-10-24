@@ -2,18 +2,18 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const axios = require('axios');
-const balancers = require('./balancers');
+const hdrezka = require('./providers/hdrezka');
 
 const zlib = require('zlib');
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const KP_KEY = '8c8e1a50-6322-4135-8875-5d40a5420d86';
 
 // ── Встроенная сжатие Gzip для минимального размера передаваемых данных ──
 app.use((req, res, next) => {
   const acceptEncoding = req.headers['accept-encoding'] || '';
-  if (!acceptEncoding.includes('gzip') || req.url.startsWith('/api/image')) {
+  if (!acceptEncoding.includes('gzip') || req.url.startsWith('/api/image') || req.url.startsWith('/api/hdrezka/image')) {
     return next();
   }
 
@@ -44,11 +44,11 @@ app.use(express.static(path.join(__dirname, 'public'), {
 const apiCacheMap = new Map();
 const API_CACHE_TTL = 10 * 60 * 1000;
 
-async function kpFetch(urlPath) {
+async function kpFetch(urlPath, ttl = API_CACHE_TTL) {
   const now = Date.now();
   if (apiCacheMap.has(urlPath)) {
     const entry = apiCacheMap.get(urlPath);
-    if (now - entry.timestamp < API_CACHE_TTL) {
+    if (now - entry.timestamp < (entry.ttl || ttl)) {
       return entry.data;
     }
     apiCacheMap.delete(urlPath);
@@ -59,7 +59,10 @@ async function kpFetch(urlPath) {
       headers: { 'X-API-KEY': KP_KEY },
       timeout: 8000
     });
-    apiCacheMap.set(urlPath, { data: response.data, timestamp: now });
+    if (apiCacheMap.size >= 500) {
+      apiCacheMap.delete(apiCacheMap.keys().next().value);
+    }
+    apiCacheMap.set(urlPath, { data: response.data, timestamp: now, ttl });
     return response.data;
   } catch (error) {
     console.error(`[kpFetch] Error ${urlPath}:`, error.message);
@@ -67,32 +70,53 @@ async function kpFetch(urlPath) {
   }
 }
 
+function formatRating(raw) {
+  if (raw === null || raw === undefined || raw === 'null' || raw === '') return '';
+  let val = raw;
+  if (typeof val === 'string' && val.endsWith('%')) {
+    const pct = parseFloat(val);
+    if (!isNaN(pct) && pct > 0) return (pct / 10).toFixed(1);
+    return '';
+  }
+  const num = parseFloat(val);
+  if (!isNaN(num) && num > 0) return num.toFixed(1);
+  return '';
+}
+
 // ── Маппинг данных с КП в формат нашего приложения ────────────────
 function mapCard(item) {
+  if (!item) return null;
   const rawPoster = item.posterUrlPreview || item.posterUrl || '';
   if (!rawPoster || rawPoster.includes('no-poster.png')) return null;
 
-  const id = String(item.kinopoiskId || item.filmId);
+  const rawId = item.kinopoiskId || item.filmId;
+  if (!rawId) return null;
+  const id = String(rawId);
   const title = item.nameRu || item.nameOriginal || item.nameEn || 'Без названия';
+  const originalTitle = item.nameOriginal || item.nameEn || '';
   const poster = `/api/image?url=${encodeURIComponent(rawPoster)}`;
-  const info = [item.year, item.genres?.map(g => g.genre).slice(0, 2).join(', ')].filter(Boolean).join(', ');
+  const year = item.year && String(item.year) !== 'null' ? String(item.year) : '';
+  const genres = Array.isArray(item.genres) ? item.genres.map(g => g.genre).filter(Boolean) : [];
+  const info = [year, genres.slice(0, 2).join(', ')].filter(Boolean).join(', ');
 
-  let rawRating = item.ratingKinopoisk || item.rating || item.ratingImdb || item.ratingAwait || '';
-  if (typeof rawRating === 'string' && rawRating.endsWith('%')) {
-    rawRating = (parseFloat(rawRating) / 10).toFixed(1);
-  }
+  const ratingKp = formatRating(item.ratingKinopoisk ?? item.rating);
+  const ratingImdb = formatRating(item.ratingImdb);
+  const ratingAwait = formatRating(item.ratingAwait);
+  const ratingDisplay = ratingKp || ratingImdb || ratingAwait || '';
 
-  let ratingDisplay = '';
-  if (rawRating) {
-    const rNum = parseFloat(rawRating);
-    if (!isNaN(rNum) && rNum > 0) {
-      ratingDisplay = rNum.toFixed(1);
-    } else if (typeof rawRating === 'string' && rawRating.length > 0 && rawRating !== 'null') {
-      ratingDisplay = rawRating;
-    }
-  }
-
-  return { id, title, poster, info, rating: ratingDisplay, url: `/movie/${id}` };
+  return {
+    id,
+    provider: 'kinopoisk',
+    title,
+    originalTitle,
+    poster,
+    year,
+    info,
+    rating: ratingDisplay,
+    ratingKp,
+    ratingImdb,
+    url: `/movie/${id}`
+  };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -161,32 +185,38 @@ const GENRE_MAP = {
 app.get('/api/popular', async (req, res) => {
   try {
     const type = req.query.type || 'films';
-    const page = parseInt(req.query.page) || 1;
-    let kpPath = `/api/v2.2/films/collections?type=TOP_POPULAR_MOVIES&page=${page}`;
-    
+    const sort = req.query.sort || 'popular';
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+
+    let collectionType = 'TOP_POPULAR_MOVIES';
     if (type === 'series') {
-      kpPath = `/api/v2.2/films/collections?type=TOP_250_TV_SHOWS&page=${page}`;
+      collectionType = sort === 'rating' ? 'TOP_250_TV_SHOWS' : 'POPULAR_SERIES';
+    } else if (sort === 'rating') {
+      collectionType = 'TOP_250_MOVIES';
     }
 
+    const kpPath = `/api/v2.2/films/collections?type=${collectionType}&page=${page}`;
     const data = await kpFetch(kpPath);
     const items = data.items || [];
-    
+
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.json(items.map(mapCard).filter(Boolean));
   } catch (e) {
     console.error('[popular error]', e.message);
-    res.status(500).json({ error: 'Ошибка загрузки каталога' });
+    res.status(500).json({ error: 'Ошибка загрузки каталога Кинопоиска' });
   }
 });
 
 app.get('/api/search', async (req, res) => {
   try {
-    const q = (req.query.q || '').toLowerCase();
+    const q = (req.query.q || '').trim();
+    const qLower = q.toLowerCase();
     const genre = req.query.genre || '';
     const year = req.query.year || '';
-    const page = parseInt(req.query.page) || 1;
+    const ratingFrom = req.query.ratingFrom || '';
+    const page = Math.max(1, parseInt(req.query.page) || 1);
 
-    if (!q && !genre && !year) return res.json([]);
+    if (!q && !genre && !year && !ratingFrom) return res.json([]);
 
     const CURATED = {
       'netflix': [4365427, 915196, 1044004, 655800, 1301710, 1045553, 1046206, 716587],
@@ -198,36 +228,45 @@ app.get('/api/search', async (req, res) => {
     };
 
     let curatedCards = [];
-    if (!genre && !year && q && CURATED[q] && page === 1) {
-      const curRequests = CURATED[q].map(id => kpFetch(`/api/v2.2/films/${id}`, 60 * 60 * 1000).catch(() => null));
+    if (!genre && !year && !ratingFrom && qLower && CURATED[qLower] && page === 1) {
+      const curRequests = CURATED[qLower].map(id => kpFetch(`/api/v2.2/films/${id}`, 60 * 60 * 1000).catch(() => null));
       const curatedData = await Promise.all(curRequests);
       curatedCards = curatedData.filter(Boolean).map(mapCard).filter(Boolean);
     }
 
     let kwCards = [];
-    if (!genre && !year && q) {
+    if (!genre && !year && !ratingFrom && q) {
       const kwData = await kpFetch(`/api/v2.1/films/search-by-keyword?keyword=${encodeURIComponent(q)}&page=${page}`, 5 * 60 * 1000);
       kwCards = (kwData.films || []).map(mapCard).filter(Boolean);
     } else {
-      let kpUrl = `/api/v2.2/films?page=${page}`;
+      let kpUrl = `/api/v2.2/films?order=NUM_VOTE&page=${page}`;
       if (q) kpUrl += `&keyword=${encodeURIComponent(q)}`;
-      if (genre) kpUrl += `&genres=${genre}`;
+      if (genre) kpUrl += `&genres=${encodeURIComponent(genre)}`;
+      if (ratingFrom) kpUrl += `&ratingFrom=${encodeURIComponent(ratingFrom)}`;
       if (year) {
         if (year.includes('-')) {
           const [from, to] = year.split('-');
-          kpUrl += `&yearFrom=${from}&yearTo=${to}`;
+          kpUrl += `&yearFrom=${encodeURIComponent(from)}&yearTo=${encodeURIComponent(to)}`;
         } else {
-          kpUrl += `&yearFrom=${year}&yearTo=${year}`;
+          kpUrl += `&yearFrom=${encodeURIComponent(year)}&yearTo=${encodeURIComponent(year)}`;
         }
       }
       const data = await kpFetch(kpUrl, 5 * 60 * 1000);
       kwCards = (data.items || []).map(mapCard).filter(Boolean);
     }
 
+    const seen = new Set();
+    const combined = [...curatedCards, ...kwCards].filter(card => {
+      if (seen.has(card.id)) return false;
+      seen.add(card.id);
+      return true;
+    });
+
     res.setHeader('Cache-Control', 'public, max-age=180');
-    res.json([...curatedCards, ...kwCards]);
+    res.json(combined);
   } catch (e) {
-    res.status(500).json({ error: 'Ошибка поиска' });
+    console.error('[search error]', e.message);
+    res.status(500).json({ error: 'Ошибка поиска Кинопоиска' });
   }
 });
 
@@ -235,98 +274,106 @@ app.get('/api/discover', async (req, res) => {
   try {
     const genre = req.query.genre || '';
     const type = req.query.type || 'films';
-    const page = req.query.page || 1;
-    
-    let kpTypes = type === 'series' ? 'TV_SERIES' : 'FILM';
+    const sort = req.query.sort === 'rating' ? 'RATING' : 'NUM_VOTE';
+    const page = Math.max(1, parseInt(req.query.page) || 1);
 
-    let kpUrl = `/api/v2.2/films?order=RATING&ratingFrom=6&page=${page}`;
+    const kpTypes = type === 'series' ? 'TV_SERIES' : 'FILM';
+    let kpUrl = `/api/v2.2/films?order=${sort}&ratingFrom=6&page=${page}`;
     if (genre) kpUrl += `&genres=${encodeURIComponent(genre)}`;
     if (kpTypes) kpUrl += `&type=${kpTypes}`;
 
     const data = await kpFetch(kpUrl);
+    res.setHeader('Cache-Control', 'public, max-age=300');
     res.json((data.items || []).map(mapCard).filter(Boolean));
   } catch (e) {
-    res.status(500).json({ error: 'Ошибка поиска жанров' });
+    console.error('[discover error]', e.message);
+    res.status(500).json({ error: 'Ошибка загрузки жанров Кинопоиска' });
   }
 });
 
 app.get('/api/movie', async (req, res) => {
   try {
-    const urlStr = req.query.url || '';
-    const id = urlStr.split('/').pop();
-    if (!id) return res.status(400).json({ error: 'Неверный URL' });
+    const rawId = String(req.query.id || req.query.url || '').split('/').pop().trim();
+    if (rawId.startsWith('hd_')) {
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json(await hdrezka.movie(rawId));
+    }
+    if (!rawId || !/^\d+$/.test(rawId)) {
+      return res.status(400).json({ error: 'Неверный ID фильма Кинопоиска' });
+    }
 
     const [data, staffData] = await Promise.all([
-      kpFetch(`/api/v2.2/films/${id}`, 60 * 60 * 1000),
-      kpFetch(`/api/v1/staff?filmId=${id}`, 60 * 60 * 1000).catch(() => [])
+      kpFetch(`/api/v2.2/films/${rawId}`, 60 * 60 * 1000),
+      kpFetch(`/api/v1/staff?filmId=${rawId}`, 60 * 60 * 1000).catch(() => [])
     ]);
 
     let directors = [];
     let actors = [];
     if (Array.isArray(staffData)) {
-      directors = staffData.filter(s => s.professionKey === 'DIRECTOR').slice(0, 2).map(s => s.nameRu || s.nameEn);
-      actors = staffData.filter(s => s.professionKey === 'ACTOR').slice(0, 6).map(s => s.nameRu || s.nameEn);
+      directors = staffData.filter(s => s.professionKey === 'DIRECTOR').slice(0, 3).map(s => s.nameRu || s.nameEn).filter(Boolean);
+      actors = staffData.filter(s => s.professionKey === 'ACTOR').slice(0, 8).map(s => s.nameRu || s.nameEn).filter(Boolean);
     }
+
+    const ratingKp = formatRating(data.ratingKinopoisk);
+    const ratingImdb = formatRating(data.ratingImdb);
+    const rating = ratingKp || ratingImdb || formatRating(data.ratingAwait) || '';
 
     res.setHeader('Cache-Control', 'public, max-age=600');
     res.json({
-      id: String(data.kinopoiskId),
-      title: data.nameRu || data.nameOriginal || 'Без названия',
+      id: String(data.kinopoiskId || rawId),
+      provider: 'kinopoisk',
+      title: data.nameRu || data.nameOriginal || data.nameEn || 'Без названия',
+      originalTitle: data.nameOriginal || data.nameEn || '',
       description: data.description || data.shortDescription || 'Нет описания',
       poster: data.posterUrl ? `/api/image?url=${encodeURIComponent(data.posterUrl)}` : '',
-      year: data.year || '',
+      year: data.year ? String(data.year) : '',
       genre: data.genres?.map(g => g.genre).join(', ') || '',
-      rating: data.ratingKinopoisk || data.ratingImdb || '',
+      rating,
+      ratingKp,
+      ratingImdb,
+      ratingKpCount: data.ratingKinopoiskVoteCount || 0,
+      ratingImdbCount: data.ratingImdbVoteCount || 0,
       countries: data.countries?.map(c => c.country).join(', ') || '',
       length: data.filmLength ? `${data.filmLength} мин.` : '',
       directors: directors.join(', '),
       actors: actors.join(', '),
-      url: urlStr,
+      url: `/movie/${data.kinopoiskId || rawId}`,
       videoSources: []
     });
   } catch (e) {
-    console.error(`[movie] Error fetching ID ${req.query.url}:`, e.message);
+    console.error(`[movie] Error fetching ID ${req.query.id || req.query.url}:`, e.message);
     res.status(500).json({ error: 'Ошибка загрузки фильма', details: e.message });
   }
 });
 
-// ── API для получения источников видео ──────────────────────────
+// ── API для получения источников видео (только Kinogo и HDRezka через Crawl4AI) ──
 app.get('/api/video-sources', async (req, res) => {
   try {
-    const { title, year, kpId } = req.query;
-    
-    if (!title && !kpId) {
-      return res.status(400).json({error: 'Требуется название или Kinopoisk ID'});
+    const { title = '', originalTitle = '', year = '' } = req.query;
+    if (!title && !originalTitle) {
+      return res.status(400).json({ error: 'Требуется название фильма' });
     }
-    
-    let sources = [];
-    
-    if (title) {
-      sources = await balancers.searchByTitle(title, year || null);
-    }
-    
-    if (kpId && sources.length === 0) {
-      try {
-        const kpSources = await balancers.searchByKinopoiskId(kpId);
-        if (kpSources && kpSources.length > 0) sources.push(...kpSources);
-      } catch (e) {}
-    }
-
-    if (kpId) {
-      const fallbackList = [
-        { name: 'Alloha HD', url: `https://alloha.tv/player/index.php?kp=${kpId}`, source: 'alloha' },
-        { name: 'Voidboost HD', url: `https://voidboost.net/embed/${kpId}`, source: 'voidboost' },
-        { name: 'VidSrc Player', url: `https://vidsrc.me/embed/movie?kp=${kpId}`, source: 'vidsrc' }
-      ];
-      fallbackList.forEach(fb => {
-        if (!sources.some(s => s.url === fb.url)) sources.push(fb);
-      });
-    }
-    
-    res.json({ sources });
+    res.setHeader('Cache-Control', 'no-store');
+    const result = await hdrezka.resolveSources({ title, originalTitle, year });
+    res.json(result);
   } catch (e) {
     console.error('[video-sources] Error:', e.message);
-    res.status(500).json({error: 'Ошибка поиска источников', details: e.message});
+    res.status(502).json({ error: 'Ошибка загрузки источников Kinogo / HDRezka', details: e.message });
+  }
+});
+
+app.get('/api/hdrezka/image', async (req, res) => {
+  const imgPath = req.query.path;
+  if (typeof imgPath !== 'string' || !/^\/uploads\/[a-zA-Z0-9/_-]+\.(jpg|jpeg|png|webp)$/i.test(imgPath)) {
+    return res.sendStatus(400);
+  }
+  try {
+    const response = await hdrezka.request(imgPath, true);
+    const type = response.headers['content-type'] || '';
+    if (!/^image\/(jpeg|png|webp)(;|$)/i.test(type)) return res.sendStatus(502);
+    res.set('Content-Type', type).set('Cache-Control', 'public, max-age=86400').send(Buffer.from(response.data));
+  } catch {
+    res.sendStatus(502);
   }
 });
 

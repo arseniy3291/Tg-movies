@@ -1,5 +1,9 @@
 'use strict';
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
 // ── Telegram WebApp ───────────────────────────────────────────
 const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); }
@@ -182,6 +186,7 @@ function updateWatchBtn(movie) {
 const State = {
   screen:       'home',
   activeTab:    'films',
+  sortMode:     'popular',
   selectedGenre: '',
   selectedGenreName: '',
   filterMode:   '', 
@@ -200,6 +205,7 @@ const I18N = {
   ru: {
     films: 'Фильмы',
     series: 'Сериалы',
+    topRating: '★ Топ-250',
     settingsTitle: 'Настройки',
     themeTitle: 'Светлая тема',
     themeSub: 'Белый фоновый режим',
@@ -216,6 +222,7 @@ const I18N = {
   en: {
     films: 'Movies',
     series: 'TV Shows',
+    topRating: '★ Top 250',
     settingsTitle: 'Settings',
     themeTitle: 'Light Theme',
     themeSub: 'White color palette mode',
@@ -238,8 +245,10 @@ const GENRES_MAP = {
   4: { ru: 'Мелодрама', en: 'Romance' },
   6: { ru: 'Фантастика', en: 'Sci-Fi' },
   11: { ru: 'Боевик', en: 'Action' },
+  12: { ru: 'Приключения', en: 'Adventure' },
   13: { ru: 'Комедия', en: 'Comedy' },
-  17: { ru: 'Ужасы', en: 'Horror' }
+  17: { ru: 'Ужасы', en: 'Horror' },
+  18: { ru: 'Мультфильм', en: 'Animation' }
 };
 
 const AppSettings = {
@@ -257,7 +266,8 @@ const GENRES = [
   { id: 11, n: 'Боевик', c: 'genre-action' },
   { id: 13, n: 'Комедия', c: 'genre-comedy' },
   { id: 17, n: 'Ужасы', c: 'genre-horror' },
-  { id: 12, n: 'Приключения', c: 'genre-adventure' }
+  { id: 12, n: 'Приключения', c: 'genre-adventure' },
+  { id: 18, n: 'Мультфильм', c: 'genre-animation' }
 ];
 
 const SERVICES = [
@@ -337,7 +347,8 @@ async function handleRoute() {
       updateTabsUI();
       showScreen('home');
       byId('search-input').value = q;
-      performSearch(q);
+      byId('btn-search-open').click();
+      doSearch(q);
     } else {
       State.activeTab = 'films';
       State.selectedGenre = '';
@@ -400,7 +411,11 @@ function updateTabsUI() {
 
 function updateGenreButtonsUI() {
   document.querySelectorAll('#genres-row .genre-chip').forEach(btn => {
-    btn.classList.toggle('active', String(btn.dataset.genreId) === String(State.selectedGenre));
+    if (btn.dataset.sort === 'rating') {
+      btn.classList.toggle('active', State.sortMode === 'rating');
+    } else {
+      btn.classList.toggle('active', String(btn.dataset.genreId) === String(State.selectedGenre));
+    }
   });
 }
 
@@ -435,19 +450,21 @@ const obs = new IntersectionObserver(entries => {
 function makeCard(movie) {
   const hist     = State.history[movie.url] || null;
   const progress = hist?.duration ? (hist.currentTime / hist.duration) * 100 : 0;
+  const rtgNum   = parseFloat(movie.rating) || 0;
+  const rtgClass = rtgNum >= 7 ? 'rtg-high' : rtgNum >= 5 ? 'rtg-mid' : rtgNum > 0 ? 'rtg-low' : '';
 
   const div = document.createElement('div');
   div.className = 'movie-card fade-up';
   obs.observe(div);
   div.innerHTML = `
     ${movie.poster
-      ? `<img src="${movie.poster}" alt="${movie.title || ''}" loading="lazy" decoding="async" onload="this.classList.add('img-loaded')" onerror="this.parentElement.style.background='var(--bg3)';this.remove()">`
+      ? `<img src="${escapeHtml(movie.poster)}" alt="${escapeHtml(movie.title || '')}" loading="lazy" decoding="async" onload="this.classList.add('img-loaded')" onerror="this.parentElement.style.background='var(--bg3)';this.remove()">`
       : ''}
     <div class="card-shade">
-      <div class="card-name">${movie.title || ''}</div>
-      ${movie.info ? `<div class="card-year">${movie.info}</div>` : ''}
+      <div class="card-name">${escapeHtml(movie.title || '')}</div>
+      ${movie.info ? `<div class="card-year">${escapeHtml(movie.info)}</div>` : ''}
     </div>
-    <div class="card-rtg"><span class="star-icon">★</span> ${movie.rating || '—'}</div>
+    <div class="card-rtg ${rtgClass}"><span class="star-icon">★</span> ${escapeHtml(movie.rating || '—')}</div>
     ${progress > 2 ? `<div class="card-pg"><div class="card-pg-fill" style="width:${Math.min(progress,100)}%"></div></div>` : ''}
   `;
   div.addEventListener('click', () => navigate(movie.url));
@@ -502,28 +519,33 @@ function shimmers(container, n = 6) {
 const popularGrid = byId('popular-grid');
 const homeScroll  = document.querySelector('.home-scroll');
 let   isLoading   = false;
+let   catalogRequest = 0;
+let   catalogEnded   = false;
 
 async function loadPopular(reset = false) {
+  if (!reset && (isLoading || catalogEnded)) return;
+  const request = ++catalogRequest;
   if (reset) {
+    catalogEnded = false;
     State.page = 1;
     State.renderedIds.clear();
     shimmers(popularGrid, 9);
   }
-  if (isLoading) return;
   isLoading = true;
 
   try {
-    // Нормализация типа — допустимы только 'films' и 'series'
     const tab = (State.activeTab === 'series') ? 'series' : 'films';
+    const sort = State.sortMode || 'popular';
 
-    let endpoint = `/api/popular?type=${tab}&page=${State.page}`;
+    let endpoint = `/api/popular?type=${tab}&sort=${sort}&page=${State.page}`;
     if (State.selectedGenre) {
-      endpoint = `/api/discover?type=${tab}&genre=${State.selectedGenre}&page=${State.page}`;
+      endpoint = `/api/discover?type=${tab}&genre=${State.selectedGenre}&sort=${sort}&page=${State.page}`;
     } else if (State.filterMode === 'service') {
-      endpoint = `/api/search?q=${State.filterValue}&page=${State.page}`;
+      endpoint = `/api/search?q=${encodeURIComponent(State.filterValue)}&page=${State.page}`;
     }
 
     const data = await api(endpoint);
+    if (request !== catalogRequest) return;
     if (reset) popularGrid.innerHTML = '';
 
     const unique = data.filter(m => {
@@ -535,11 +557,17 @@ async function loadPopular(reset = false) {
     const fragment = document.createDocumentFragment();
     unique.forEach(m => fragment.appendChild(makeCard(m)));
     popularGrid.appendChild(fragment);
+    catalogEnded = unique.length === 0;
     State.page++;
-    isLoading = false;
-  } catch {
-    if (reset) popularGrid.innerHTML = `<div class="empty-hint" style="grid-column:1/-1"><div class="empty-icon">😕</div><p>Не удалось загрузить.</p></div>`;
-    isLoading = false;
+    if (reset && !unique.length) {
+      popularGrid.innerHTML = `<div class="empty-hint" style="grid-column:1/-1"><p>В этом разделе пока нет фильмов.</p></div>`;
+    }
+  } catch (err) {
+    if (request !== catalogRequest) return;
+    if (reset) popularGrid.innerHTML = `<div class="empty-hint" style="grid-column:1/-1"><div class="empty-icon">😕</div><p>${escapeHtml(err.message || 'Не удалось загрузить каталог.')}</p></div>`;
+    catalogEnded = true;
+  } finally {
+    if (request === catalogRequest) isLoading = false;
   }
 }
 
@@ -614,6 +642,20 @@ function renderGenresAndServices() {
   const lang = AppSettings.lang || 'ru';
 
   const fragment = document.createDocumentFragment();
+
+  // Чип сортировки по рейтингу Кинопоиска (Топ-250)
+  const topBtn = document.createElement('button');
+  topBtn.className = 'genre-chip chip-top-rating';
+  topBtn.dataset.sort = 'rating';
+  topBtn.textContent = (I18N[lang] && I18N[lang].topRating) || '★ Топ-250';
+  if (State.sortMode === 'rating') topBtn.classList.add('active');
+  topBtn.onclick = () => {
+    State.sortMode = State.sortMode === 'rating' ? 'popular' : 'rating';
+    updateGenreButtonsUI();
+    loadPopular(true);
+  };
+  fragment.appendChild(topBtn);
+
   GENRES.forEach(g => {
     const btn = document.createElement('button');
     btn.className = 'genre-chip';
@@ -698,6 +740,10 @@ const searchGrid    = byId('search-results');
 const searchEmpty   = byId('search-empty');
 const searchLoader  = byId('search-loader');
 let   searchTimer   = null;
+let   searchRequest = 0;
+let   searchPage    = 1;
+let   searchQuery   = '';
+const searchIds     = new Set();
 
 byId('btn-search-open').addEventListener('click', () => {
   searchOverlay.classList.remove('hidden');
@@ -709,6 +755,8 @@ byId('btn-search-open').addEventListener('click', () => {
 byId('btn-search-close-top').addEventListener('click', closeSearch);
 
 function closeSearch() {
+  searchRequest++;
+  clearTimeout(searchTimer);
   searchOverlay.classList.remove('active');
   searchOverlay.classList.add('closing');
   
@@ -728,6 +776,7 @@ function closeSearch() {
 }
 
 searchInput.addEventListener('input', () => {
+  searchRequest++;
   clearTimeout(searchTimer);
   const q = searchInput.value.trim();
   const viewport = byId('search-results-viewport');
@@ -799,13 +848,13 @@ function initFilters() {
   };
 }
 
-function updateYearSliderUI(v1, v2) {
+function updateYearSliderUI(v1, v2, isAll = false) {
   const min = 1940;
-  const max = 2024;
+  const max = 2026;
   const rangeDisplay = byId('year-range-display');
   const mask = byId('range-mask');
   
-  if (rangeDisplay) rangeDisplay.textContent = `${v1} — ${v2}`;
+  if (rangeDisplay) rangeDisplay.textContent = isAll ? 'Все годы' : `${v1} — ${v2}`;
   
   if (mask) {
     const left = ((v1 - min) / (max - min)) * 100;
@@ -823,61 +872,85 @@ function updateFilterUI() {
 
 function resetFilters() {
   State.filters.genre = '';
-  State.filters.year = '1960-2024';
+  State.filters.year = '';
   
   const minInput = byId('year-min');
   const maxInput = byId('year-max');
   if (minInput) minInput.value = 1960;
-  if (maxInput) maxInput.value = 2024;
+  if (maxInput) maxInput.value = 2026;
   
-  updateYearSliderUI(1960, 2024);
+  updateYearSliderUI(1960, 2026, true);
   updateFilterUI();
 }
 
-async function doSearch(q) {
+async function doSearch(q, more = false) {
+  const request = ++searchRequest;
   const viewport = byId('search-results-viewport');
   const genre = State.filters.genre;
   const year  = State.filters.year;
+  q = (q ?? searchQuery ?? '').trim();
+
+  if (!more) {
+    searchPage = 1;
+    searchQuery = q;
+    searchIds.clear();
+    searchGrid.innerHTML = '';
+  }
 
   if (!q && !genre && !year) {
-     searchGrid.innerHTML = '';
-     searchLoader.classList.add('hidden');
-     searchEmpty.classList.add('hidden');
-     viewport.classList.add('hidden');
-     return;
+    searchGrid.innerHTML = '';
+    searchLoader.classList.add('hidden');
+    searchEmpty.classList.add('hidden');
+    viewport.classList.add('hidden');
+    return;
   }
 
   viewport.classList.remove('hidden');
   searchLoader.classList.remove('hidden');
   searchEmpty.classList.add('hidden');
-  searchGrid.innerHTML = '';
   byId('btn-search-all').classList.add('hidden');
 
   try {
-    const data = await api(`/api/search?q=${encodeURIComponent(q)}&genre=${genre}&year=${year}`);
-    searchLoader.classList.add('hidden');
-    
-    if (!data || !data.length) { 
-      searchEmpty.classList.remove('hidden'); 
-      return; 
+    const data = await api(`/api/search?q=${encodeURIComponent(q)}&genre=${encodeURIComponent(genre)}&year=${encodeURIComponent(year)}&page=${searchPage}`);
+    if (request !== searchRequest) return;
+
+    const unique = (data || []).filter(m => {
+      if (!m || searchIds.has(m.id)) return false;
+      searchIds.add(m.id);
+      return true;
+    });
+
+    if (!searchIds.size) {
+      searchEmpty.classList.remove('hidden');
+      return;
     }
 
-    const first = data[0];
-    const others = data.slice(1, 6);
-
-    renderSearchGroup('Возможно, вы искали', [first]);
-    if (others.length > 0) {
-      renderSearchGroup('Фильмы и сериалы', others);
+    if (!more && unique.length > 0) {
+      const first = unique[0];
+      const others = unique.slice(1);
+      renderSearchGroup('Лучшее совпадение', [first]);
+      if (others.length > 0) {
+        renderSearchGroup('Фильмы и сериалы', others);
+      }
+    } else if (more && unique.length > 0) {
+      renderSearchGroup(`Страница ${searchPage}`, unique);
     }
 
-    byId('btn-search-all').classList.remove('hidden');
+    searchPage++;
+    const allBtn = byId('btn-search-all');
+    allBtn.textContent = 'Загрузить ещё';
+    allBtn.classList.toggle('hidden', unique.length < 10);
 
   } catch (err) {
+    if (request !== searchRequest) return;
     console.error('Search error:', err);
-    searchLoader.classList.add('hidden');
     searchEmpty.classList.remove('hidden');
+  } finally {
+    if (request === searchRequest) searchLoader.classList.add('hidden');
   }
 }
+
+byId('btn-search-all').onclick = () => doSearch(searchQuery, true);
 
 function renderSearchGroup(title, items) {
   const header = document.createElement('div');
@@ -888,7 +961,7 @@ function renderSearchGroup(title, items) {
   const frag = document.createDocumentFragment();
   items.forEach(m => {
     const item = makeSearchItem(m);
-    item.addEventListener('click', () => { closeSearch(); openMovieDetail(m); });
+    item.addEventListener('click', () => { closeSearch(); navigate(m.url); });
     frag.appendChild(item);
   });
   searchGrid.appendChild(frag);
@@ -899,19 +972,26 @@ function makeSearchItem(m) {
   div.className = 's-item';
 
   const rtg = parseFloat(m.rating) || 0;
-  const rtgClass = rtg >= 7 ? 'high' : rtg >= 4 ? 'mid' : 'low';
+  const rtgClass = rtg >= 7 ? 'high' : rtg >= 5 ? 'mid' : 'low';
   
-  const metaParts = m.info.split(', ');
+  const metaParts = (m.info || '').split(', ');
   const year = metaParts[0] || '';
   const secondary = metaParts.slice(1).join(', ') || '';
 
+  const kpBadge = m.ratingKp
+    ? `<span class="s-item-rtg ${rtgClass}">КП ${escapeHtml(m.ratingKp)}</span>`
+    : (rtg > 0 ? `<span class="s-item-rtg ${rtgClass}">★ ${escapeHtml(m.rating)}</span>` : '');
+  const imdbBadge = (m.ratingImdb && m.ratingImdb !== m.ratingKp)
+    ? `<span class="s-item-rtg imdb">IMDb ${escapeHtml(m.ratingImdb)}</span>`
+    : '';
+
   div.innerHTML = `
-    <img src="${m.poster}" class="s-item-img" decoding="async" alt="" onerror="this.src='https://via.placeholder.com/44x64?text=?'">
+    <img src="${escapeHtml(m.poster)}" class="s-item-img" decoding="async" alt="" onerror="this.src='https://via.placeholder.com/44x64?text=?'">
     <div class="s-item-info">
-      <div class="s-item-title">${m.title}</div>
+      <div class="s-item-title">${escapeHtml(m.title)}</div>
       <div class="s-item-meta">
-        ${rtg > 0 ? `<span class="s-item-rtg ${rtgClass}">${m.rating}</span>` : ''}
-        <span>${secondary}${secondary && year ? ', ' : ''}${year}</span>
+        ${kpBadge}${imdbBadge}
+        <span>${escapeHtml(secondary)}${secondary && year ? ', ' : ''}${escapeHtml(year)}</span>
       </div>
     </div>
   `;
@@ -922,7 +1002,26 @@ function makeSearchItem(m) {
 // ЭКРАН ДЕТАЛИ ФИЛЬМА
 // ════════════════════════════════════════════════════════════════
 
+let movieDetailRequest = 0;
+
+function renderRatingBadges(movieObj) {
+  const badges = [];
+  const kp = movieObj.ratingKp || movieObj.rating || '';
+  const imdb = movieObj.ratingImdb || '';
+  if (kp) {
+    badges.push(`<span class="imdb-badge kp-badge">КП ${escapeHtml(kp)}</span>`);
+  }
+  if (imdb && imdb !== kp) {
+    badges.push(`<span class="imdb-badge">IMDb ${escapeHtml(imdb)}</span>`);
+  } else if (imdb && !movieObj.ratingKp) {
+    badges.push(`<span class="imdb-badge">IMDb ${escapeHtml(imdb)}</span>`);
+  }
+  return badges.join('');
+}
+
 async function openMovieDetail(movie, autoPlay = false, updateUrl = false) {
+  stopPlayer();
+  const detailRequest = ++movieDetailRequest;
   State.currentMovie = movie;
   
   if (movie.title) document.title = `${movie.title} | CineGram`;
@@ -935,9 +1034,9 @@ async function openMovieDetail(movie, autoPlay = false, updateUrl = false) {
   byId('movie-sub').textContent   = '';
   byId('movie-genre').textContent = '';
   byId('movie-desc').textContent  = '';
-  byId('movie-rating').innerHTML  = '';
+  byId('movie-rating').innerHTML  = renderRatingBadges(movie);
   byId('movie-poster').src        = movie.poster || '';
-  byId('movie-bg').style.backgroundImage = movie.poster ? `url('${movie.poster}')` : '';
+  byId('movie-bg').style.backgroundImage = movie.poster ? `url('${escapeHtml(movie.poster)}')` : '';
   
   byId('movie-year').textContent      = '—';
   byId('movie-countries').textContent = 'Загрузка...';
@@ -955,20 +1054,20 @@ async function openMovieDetail(movie, autoPlay = false, updateUrl = false) {
 
   try {
     const detail = await api(`/api/movie?url=${encodeURIComponent(movie.url)}`);
+    if (detailRequest !== movieDetailRequest) return;
     if (!detail.id) detail.id = movie.id;
     State.currentMovie = { ...movie, ...detail };
+    document.title = `${detail.title || movie.title} | CineGram`;
 
     byId('movie-title').textContent = detail.title || movie.title;
     byId('movie-poster').src        = detail.poster || movie.poster || '';
-    byId('movie-bg').style.backgroundImage = (detail.poster || movie.poster) ? `url('${detail.poster || movie.poster}')` : '';
+    byId('movie-bg').style.backgroundImage = (detail.poster || movie.poster) ? `url('${escapeHtml(detail.poster || movie.poster)}')` : '';
     
     byId('movie-sub').textContent   = [detail.year, detail.genre].filter(Boolean).join(' · ');
     byId('movie-year').textContent  = detail.year || '—';
     byId('movie-desc').textContent  = detail.description || '';
 
-    if (detail.rating) {
-      byId('movie-rating').innerHTML = `<span class="imdb-badge">${detail.rating}</span>`;
-    }
+    byId('movie-rating').innerHTML = renderRatingBadges(detail);
 
     byId('movie-countries').textContent = detail.countries || '—';
     byId('movie-length').textContent    = detail.length || '—';
@@ -986,9 +1085,9 @@ async function openMovieDetail(movie, autoPlay = false, updateUrl = false) {
 
   } catch (err) {
     console.error('[movie detail]', err);
-    byId('movie-desc').textContent = 'Не удалось загрузить информацию.';
+    if (detailRequest === movieDetailRequest) byId('movie-desc').textContent = 'Не удалось загрузить информацию.';
   } finally {
-    byId('movie-loader').classList.add('hidden');
+    if (detailRequest === movieDetailRequest) byId('movie-loader').classList.add('hidden');
   }
 }
 
@@ -1019,161 +1118,111 @@ byId('btn-watchlist').addEventListener('click', () => {
 byId('btn-play')?.addEventListener('click', launchKinobox);
 
 // ════════════════════════════════════════════════════════════════
-// MULTI-SOURCE PLAYER (CLEAN MODE + BALANCERS)
+// ПЛЕЕР KINOGO + HDREZКА (ЧЕРЕЗ CRAWL4AI)
 // ════════════════════════════════════════════════════════════════
 
-const MIRRORS = [
-  { id: 'kinobox',   name: '🎬 Kinobox Auto',       url: (id) => `https://kinobox.in/player?kp=${id}`,          type: 'kinobox' },
-  { id: 'alloha',    name: 'Источник 1 (Alloha)',    url: (id) => `https://single.alloha.tv/?kp=${id}`,          type: 'pure' },
-  { id: 'voidboost', name: 'Источник 2 (Voidboost)', url: (id) => `https://voidboost.net/embed/${id}`,           type: 'pure' },
-  { id: 'vidsrc',    name: 'Источник 3 (VidSrc)',    url: (id) => `https://vidsrc.to/embed/movie/${id}`,         type: 'pure' },
-  { id: 'kpvip',     name: 'Источник 4 (KP VIP)',    url: (id) => `https://kinopoisk.vip/embed/${id}`,           type: 'pure' }
-];
+let playerRequest = 0;
 
-let playerState = {
-  currentMirrorIndex: 0,
-  useBalancers: false,
-  balancerIndex: 0
-};
-
-function launchKinobox() {
-  const movie = State.currentMovie;
-  if (!movie) return;
-
-  const kbContainer = byId('kinobox-container');
-  const sourcesBar  = byId('player-sources');
-
-  kbContainer.classList.remove('hidden');
-  
-  // Render Switcher
-  if (sourcesBar) {
-    let buttonsHtml = '';
-    
-    MIRRORS.forEach((m, idx) => {
-      const globalIdx = idx;
-      buttonsHtml += `<button class="source-btn ${globalIdx === playerState.currentMirrorIndex && !playerState.useBalancers ? 'active' : ''}" 
-                      onclick="switchPlayerSource(${globalIdx}, false)">
-        ${m.name}
-      </button>`;
-    });
-    
-    if (movie.videoSources && movie.videoSources.length > 0) {
-      movie.videoSources.forEach((source, idx) => {
-        const globalIdx = MIRRORS.length + idx;
-        const isActive = globalIdx === playerState.currentMirrorIndex && playerState.useBalancers;
-        buttonsHtml += `<button class="source-btn ${isActive ? 'active' : ''}" 
-                        onclick="switchPlayerSource(${globalIdx}, true, ${idx})">
-          ${source.name || source.source}
-        </button>`;
-      });
-    }
-    
-    sourcesBar.innerHTML = buttonsHtml;
-  }
-
-  // Initial Load
-  loadMirror(playerState.currentMirrorIndex, playerState.useBalancers, playerState.balancerIndex);
-
-  setTimeout(() => {
-    kbContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, 100);
-
+function stopPlayer() {
+  playerRequest++;
   if (State.playerProgressInterval) clearInterval(State.playerProgressInterval);
-  State.playerProgressInterval = setInterval(() => {
-      upsertHist({
-          url: movie.url, title: movie.title, poster: movie.poster,
-          info: movie.info || '', currentTime: 10, duration: 100
-      });
-  }, 10000);
-
-  upsertHist({
-    url: movie.url, title: movie.title, poster: movie.poster,
-    info: movie.info || '', currentTime: 0, duration: 0
-  });
-
-  const closePlayerBtn = byId('btn-player-close');
-  if (closePlayerBtn) {
-    closePlayerBtn.onclick = () => {
-      kbContainer.classList.add('hidden');
-      const playerDiv = kbContainer.querySelector('.kinobox_player');
-      if (playerDiv) playerDiv.innerHTML = '';
-    };
+  const player = byId('kinobox-container');
+  if (player) {
+    player.classList.add('hidden');
+    player.querySelector('.kinobox_player').replaceChildren();
   }
 }
 
-window.switchPlayerSource = function(index, isBalancer, balancerIdx = 0) {
-  playerState.currentMirrorIndex = index;
-  playerState.useBalancers = isBalancer;
-  playerState.balancerIndex = balancerIdx;
-  
-  const btns = document.querySelectorAll('.source-btn');
-  btns.forEach((btn, idx) => btn.classList.toggle('active', idx === index));
-  
-  loadMirror(index, isBalancer, balancerIdx);
-};
-
-function loadMirror(index, isBalancer = false, balancerIdx = 0) {
+async function launchKinobox() {
   const movie = State.currentMovie;
-  const playerDiv = byId('kinobox-container')?.querySelector('.kinobox_player');
+  if (!movie) return;
+
+  const request = ++playerRequest;
+  const container = byId('kinobox-container');
+  const player = container.querySelector('.kinobox_player');
+  const bar = byId('player-sources');
   const wrapper = byId('kinobox-player-wrapper');
 
-  if (!movie || !playerDiv) return;
+  wrapper.classList.remove('clipped');
+  container.classList.remove('hidden');
+  player.textContent = 'Загрузка плееров Kinogo и HDRezka…';
+  bar.replaceChildren();
+  byId('btn-player-close').onclick = stopPlayer;
 
-  playerDiv.innerHTML = '';
+  try {
+    const params = new URLSearchParams({
+      title: movie.title || '',
+      originalTitle: movie.originalTitle || '',
+      year: movie.year || ''
+    });
+    const res = await api(`/api/video-sources?${params.toString()}`, false);
+    if (request !== playerRequest || State.currentMovie?.id !== movie.id) return;
 
-  const mirror = MIRRORS[index];
-  if (!isBalancer && mirror && mirror.type === 'kinobox' && typeof window.Kinobox !== 'undefined') {
-    try {
-      new window.Kinobox('.kinobox_player', {
-        search: {
-          kinopoisk: movie.id,
-          title: movie.title
-        },
-        menu: {
-          enable: true,
-          default: 'alloha'
-        },
-        players: {
-          alloha:    { enable: true, position: 1, title: 'Alloha' },
-          videocdn:  { enable: true, position: 2, title: 'VideoCDN' },
-          voidboost: { enable: true, position: 3, title: 'Voidboost' },
-          kodik:     { enable: true, position: 4, title: 'Kodik' },
-          collaps:   { enable: true, position: 5, title: 'Collaps' }
-        }
-      }).init();
-      return;
-    } catch (e) {
-      console.error('[Kinobox SDK error]', e);
+    const sources = res.sources || [];
+    const buttons = [];
+
+    const select = (source, index) => {
+      const url = new URL(source.url);
+      if (url.protocol !== 'https:') return;
+      const frame = document.createElement('iframe');
+      frame.src = url.href;
+      frame.title = `${movie.title || ''} — ${source.name}`;
+      frame.width = '100%';
+      frame.height = '100%';
+      frame.style.border = '0';
+      frame.style.borderRadius = '12px';
+      frame.style.background = '#000';
+      frame.allow = 'autoplay; fullscreen; encrypted-media; picture-in-picture';
+      frame.allowFullscreen = true;
+      player.replaceChildren(frame);
+      buttons.forEach((btn, i) => btn.classList.toggle('active', i === index));
+      if (!source.trailer) {
+        upsertHist({
+          url: movie.url,
+          id: movie.id,
+          title: movie.title,
+          poster: movie.poster,
+          rating: movie.rating,
+          info: movie.info || [movie.year, movie.genre].filter(Boolean).join(', '),
+          currentTime: 0,
+          duration: 0
+        });
+      }
+    };
+
+    sources.forEach((source, index) => {
+      const btn = document.createElement('button');
+      btn.className = 'source-btn';
+      btn.textContent = source.name;
+      btn.onclick = () => select(source, index);
+      buttons.push(btn);
+      bar.appendChild(btn);
+    });
+
+    for (const [label, extUrl] of [['Kinogo ↗', res.kinogoUrl], ['HDRezka ↗', res.hdrezkaUrl]]) {
+      if (!extUrl) continue;
+      const link = document.createElement('a');
+      link.className = 'source-btn';
+      link.textContent = label;
+      link.href = extUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      bar.appendChild(link);
+    }
+
+    if (sources.length) {
+      const firstIdx = Math.max(0, sources.findIndex(s => !s.trailer));
+      select(sources[firstIdx], firstIdx);
+    } else {
+      player.textContent = 'Встроенные плееры Kinogo и HDRezka для этого фильма не найдены. Воспользуйтесь кнопками перехода выше.';
+    }
+
+    container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch (err) {
+    if (request === playerRequest) {
+      player.textContent = err.message || 'Не удалось загрузить плееры Kinogo / HDRezka.';
     }
   }
-
-  let iframeSrc = '';
-  let mirrorType = 'pure';
-
-  if (isBalancer && movie.videoSources && movie.videoSources[balancerIdx]) {
-    const source = movie.videoSources[balancerIdx];
-    iframeSrc = source.directUrl || source.url;
-    mirrorType = 'pure';
-  } else {
-    const m = MIRRORS[index] || MIRRORS[1];
-    iframeSrc = m.url(movie.id);
-    mirrorType = m.type;
-  }
-
-  if (wrapper) {
-    wrapper.classList.toggle('clipped', mirrorType === 'clipped');
-  }
-
-  playerDiv.innerHTML = `
-    <iframe
-      src="${iframeSrc}"
-      width="100%" height="100%"
-      frameborder="0"
-      allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-      allowfullscreen
-      style="border-radius:12px; background: #000;">
-    </iframe>
-  `;
 }
 
 // ════════════════════════════════════════════════════════════════

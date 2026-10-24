@@ -87,14 +87,25 @@ function mapCatalog(items) {
   return cards;
 }
 
+function toProxiedPlayerUrl(rawUrl, refOrigin) {
+  return `/api/player-proxy?url=${encodeURIComponent(rawUrl)}&ref=${encodeURIComponent(refOrigin + '/')}`;
+}
+
 function mapSources(players = []) {
   const sources = [];
   for (const player of players) {
-    const url = safeUrl(player.url || player.src);
-    if (!url || sources.some(s => s.url === url)) continue;
+    const rawUrl = safeUrl(player.url || player.src);
+    if (!rawUrl || sources.some(s => s.directUrl === rawUrl)) continue;
     const label = clean(player.name);
-    const trailer = /трейлер/i.test(label) || /(^|\.)(youtube\.com|youtu\.be)$/.test(new URL(url).hostname);
-    sources.push({ source: 'hdrezka', name: trailer ? 'Трейлер' : 'HDRezka · ' + (label || 'Плеер'), type: 'iframe', url, trailer });
+    const trailer = /трейлер/i.test(label) || /(^|\.)(youtube\.com|youtu\.be)$/.test(new URL(rawUrl).hostname);
+    sources.push({
+      source: 'hdrezka',
+      name: trailer ? 'Трейлер' : 'HDRezka · ' + (label || 'Плеер'),
+      type: 'iframe',
+      url: trailer ? rawUrl : toProxiedPlayerUrl(rawUrl, ORIGIN),
+      directUrl: rawUrl,
+      trailer
+    });
   }
   return sources;
 }
@@ -155,15 +166,16 @@ function mapKinogoSources(item = {}) {
   const players = item.players || [];
   const sources = [];
   players.forEach((p, idx) => {
-    const url = safeUrl(p.url || p.src, KINOGO_ORIGIN);
-    if (!url || sources.some(s => s.url === url)) return;
+    const rawUrl = safeUrl(p.url || p.src, KINOGO_ORIGIN);
+    if (!rawUrl || sources.some(s => s.directUrl === rawUrl)) return;
     const label = tabs[idx] || `Плеер ${idx + 1}`;
-    const trailer = /трейлер|trailer/i.test(label) || /\/trailer\//i.test(url);
+    const trailer = /трейлер|trailer/i.test(label) || /\/trailer\//i.test(rawUrl);
     sources.push({
       source: 'kinogo',
       name: trailer ? 'Kinogo · Трейлер' : `Kinogo · ${label}`,
       type: 'iframe',
-      url,
+      url: trailer ? rawUrl : toProxiedPlayerUrl(rawUrl, KINOGO_ORIGIN),
+      directUrl: rawUrl,
       trailer
     });
   });
@@ -205,8 +217,7 @@ async function resolveHdrezkaByTitle(title, year) {
 async function resolveKinogoByTitle(title, year) {
   const q = clean(title);
   if (!q) return { sources: [], url: KINOGO_ORIGIN };
-  const params = new URLSearchParams({ do: 'search', subaction: 'search', story: q });
-  const searchPath = '/index.php?' + params.toString();
+  const searchPath = '/search/' + encodeURIComponent(q);
   const key = 'kinogo_search:' + searchPath;
   let items = cache.get(key)?.until > Date.now() ? cache.get(key).data : null;
   if (!items) {

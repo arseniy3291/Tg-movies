@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const axios = require('axios');
 const hdrezka = require('./providers/hdrezka');
+const { handlePlayerProxy } = require('./providers/adblock');
 
 const zlib = require('zlib');
 
@@ -13,7 +14,7 @@ const KP_KEY = '8c8e1a50-6322-4135-8875-5d40a5420d86';
 // ── Встроенная сжатие Gzip для минимального размера передаваемых данных ──
 app.use((req, res, next) => {
   const acceptEncoding = req.headers['accept-encoding'] || '';
-  if (!acceptEncoding.includes('gzip') || req.url.startsWith('/api/image') || req.url.startsWith('/api/hdrezka/image')) {
+  if (!acceptEncoding.includes('gzip') || req.url.startsWith('/api/image') || req.url.startsWith('/api/hdrezka/image') || req.url.startsWith('/api/player-proxy')) {
     return next();
   }
 
@@ -361,6 +362,8 @@ app.get('/api/video-sources', async (req, res) => {
     res.status(502).json({ error: 'Ошибка загрузки источников Kinogo / HDRezka', details: e.message });
   }
 });
+
+app.all('/api/player-proxy', express.raw({ type: '*/*', limit: '2mb' }), handlePlayerProxy);
 
 app.get('/api/hdrezka/image', async (req, res) => {
   const imgPath = req.query.path;

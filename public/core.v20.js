@@ -1162,8 +1162,8 @@ async function launchKinobox() {
     const buttons = [];
 
     const select = (source, index) => {
-      const url = new URL(source.url);
-      if (url.protocol !== 'https:') return;
+      const url = new URL(source.url, window.location.origin);
+      if (url.protocol !== 'https:' && url.origin !== window.location.origin) return;
       const frame = document.createElement('iframe');
       frame.src = url.href;
       frame.title = `${movie.title || ''} — ${source.name}`;
@@ -1174,6 +1174,7 @@ async function launchKinobox() {
       frame.style.background = '#000';
       frame.allow = 'autoplay; fullscreen; encrypted-media; picture-in-picture';
       frame.allowFullscreen = true;
+      frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation allow-forms');
       player.replaceChildren(frame);
       buttons.forEach((btn, i) => btn.classList.toggle('active', i === index));
       if (!source.trailer) {

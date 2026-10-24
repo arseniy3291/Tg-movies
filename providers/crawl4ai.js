@@ -135,7 +135,7 @@ async function crawlFallback(url, kind) {
   }
   const response = await axios.get(url, {
     timeout: 15000,
-    maxRedirects: 0,
+    maxRedirects: 3,
     responseType: 'text',
     headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'ru,en;q=0.8' }
   });

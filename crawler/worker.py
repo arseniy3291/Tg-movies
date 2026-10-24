@@ -90,7 +90,7 @@ def emit(data):
 
 
 async def main():
-    config = HTTPCrawlerConfig(follow_redirects=False, verify_ssl=True,
+    config = HTTPCrawlerConfig(follow_redirects=True, verify_ssl=True,
         headers={"User-Agent": "Mozilla/5.0", "Accept-Language": "ru,en;q=0.8"},
         downloads_path=str(ROOT / ".crawl4ai" / "downloads"))
     limit = asyncio.Semaphore(2)

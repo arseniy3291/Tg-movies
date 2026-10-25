@@ -148,7 +148,7 @@ function cleanPlayerHtml(html, targetUrl) {
   // 3. Cinemar: strip preroll, midroll, vastConfig, dp_vast
   out = out.replace(/"vastConfig"\s*:\s*\{[^}]*\}/g, '"vastConfig":{"resetTime":0,"prerollCount":0,"midrollCount":0}');
   out = out.replace(/"preroll"\s*:\s*\[[\s\S]*?\](?=,"midroll")/g, '"preroll":[]');
-  out = out.replace(/"midroll"\s*:\s*\[[\s\S]*?\](?=,"dp_vast")/g, '"midroll":[]');
+  out = out.replace(/"midroll"\s*:\s*\[[\s\S]*?\](?=,"poster"|,"dp_vast")/g, '"midroll":[]');
   out = out.replace(/"dp_vast"\s*:\s*true/g, '"dp_vast":false');
 
   // 4. NextEmbed / Collaps / VenomPlayer: strip <script data-name="ad"> and adsConfig
@@ -228,14 +228,28 @@ async function handlePlayerProxy(req, res) {
       'Referer': effectiveRef,
       'Origin': new URL(effectiveRef).origin
     };
-    for (const h of ['content-type', 'accepts-block', 'x-requested-with', 'range']) {
+    for (const h of ['content-type', 'accepts-block', 'x-requested-with', 'range', 'borth', 'authorization']) {
       if (req.headers[h]) headers[h] = req.headers[h];
+    }
+
+    let postData = undefined;
+    if (method === 'POST' && req.body !== undefined) {
+      const ct = String(req.headers['content-type'] || '').toLowerCase();
+      if (Buffer.isBuffer(req.body)) {
+        postData = req.body;
+      } else if (ct.includes('application/x-www-form-urlencoded') && req.body && typeof req.body === 'object') {
+        postData = new URLSearchParams(req.body).toString();
+      } else if (ct.includes('application/json') && typeof req.body === 'string' && !/^["{\[]/.test(req.body.trim())) {
+        postData = JSON.stringify(req.body);
+      } else {
+        postData = req.body;
+      }
     }
 
     const response = await axios({
       method,
       url: parsed.href,
-      data: method === 'POST' ? req.body : undefined,
+      data: postData,
       responseType: 'arraybuffer',
       timeout: 12000,
       maxRedirects: 3,
@@ -245,6 +259,18 @@ async function handlePlayerProxy(req, res) {
 
     const contentType = String(response.headers['content-type'] || 'text/html');
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Expose-Headers', '*');
+    const skipRespHeaders = new Set([
+      'transfer-encoding', 'content-encoding', 'content-length', 'connection',
+      'keep-alive', 'x-frame-options', 'content-security-policy', 'alt-svc',
+      'strict-transport-security', 'set-cookie', 'access-control-allow-origin',
+      'content-type', 'cache-control'
+    ]);
+    for (const [k, v] of Object.entries(response.headers || {})) {
+      if (!skipRespHeaders.has(k.toLowerCase()) && v !== undefined) {
+        try { res.setHeader(k, v); } catch {}
+      }
+    }
 
     if (/text\/html/i.test(contentType)) {
       const html = Buffer.from(response.data).toString('utf8');

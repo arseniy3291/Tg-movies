@@ -35,7 +35,10 @@ app.use((req, res, next) => {
 });
 
 app.use(cors());
-app.use(express.json());
+// Raw body parser specifically for /api/player-proxy so JSON primitive strings and form-urlencoded bodies are forwarded verbatim
+app.use('/api/player-proxy', express.raw({ type: '*/*', limit: '2mb' }));
+app.use(express.json({ strict: false }));
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: '7d',
   etag: true

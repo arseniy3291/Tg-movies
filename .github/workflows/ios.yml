@@ -31,23 +31,26 @@ jobs:
       - name: Package unsigned IPA
         working-directory: apps/ios
         run: |
+          plutil -p build/device/Build/Products/Release-iphoneos/CineGram.app/Info.plist
+          test "$(plutil -extract CFBundleIdentifier raw build/device/Build/Products/Release-iphoneos/CineGram.app/Info.plist)" = 'app.cinegram.ios'
+          test -f build/device/Build/Products/Release-iphoneos/CineGram.app/Resources/public/index.html
           mkdir -p build/package/Payload
           cp -R build/device/Build/Products/Release-iphoneos/CineGram.app build/package/Payload/
           cd build/package
           zip -qry ../CineGram-iOS-unsigned.ipa Payload
           cd ..
           shasum -a 256 CineGram-iOS-unsigned.ipa > SHA256SUMS-iOS.txt
-      - name: Test launch on iPhone simulator
-        working-directory: apps/ios
-        run: |
-          simulator_id=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for v in d["devices"].values() for x in v if x["isAvailable"] and x["name"].startswith("iPhone")))')
-          xcodebuild -project CineGram.xcodeproj -scheme CineGram -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id" -derivedDataPath build/simulator -resultBundlePath build/UITests.xcresult CODE_SIGNING_ALLOWED=NO test
       - uses: actions/upload-artifact@v4
         with:
           name: CineGram-iOS-unsigned
           path: |
             apps/ios/build/CineGram-iOS-unsigned.ipa
             apps/ios/build/SHA256SUMS-iOS.txt
+      - name: Test launch on iPhone simulator
+        working-directory: apps/ios
+        run: |
+          simulator_id=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for v in d["devices"].values() for x in v if x["isAvailable"] and x["name"].startswith("iPhone")))')
+          xcodebuild -project CineGram.xcodeproj -scheme CineGram -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id" -derivedDataPath build/simulator -resultBundlePath build/UITests.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY='-' test
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -177,7 +177,7 @@ function startWorker() {
 }
 
 function crawl(url, kind) {
-  if (!pythonAvailable || process.env.VERCEL) {
+  if (!pythonAvailable || process.env.VERCEL || process.env.CINEGRAM_EMBEDDED === '1') {
     return crawlFallback(url, kind);
   }
   if (waiting.size >= 8) return Promise.reject(Object.assign(new Error('Парсер занят. Попробуйте снова.'), { status: 503 }));

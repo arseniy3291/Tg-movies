@@ -1,0 +1,53 @@
+name: Build CineGram apps
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            command: build:mac
+          - os: windows-latest
+            command: build:win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/package-lock.json
+      - run: npm ci --prefix apps
+      - run: npm --prefix apps run ${{ matrix.command }} -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CineGram-${{ matrix.os }}
+          path: |
+            apps/dist/*.dmg
+            apps/dist/*.exe
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci --prefix apps
+      - run: npm --prefix apps run prepare:android
+      - run: ./gradlew assembleDebug testDebugUnitTest lintDebug --console=plain
+        working-directory: apps/android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CineGram-Android-preview
+          path: apps/android/app/build/outputs/apk/debug/*.apk

@@ -1,0 +1,53 @@
+{
+  "appId": "app.cinegram.desktop",
+  "productName": "CineGram",
+  "artifactName": "CineGram-${version}-${os}-${arch}.${ext}",
+  "directories": {
+    "output": "dist",
+    "buildResources": "bundle"
+  },
+  "extraMetadata": {
+    "main": "desktop/main.cjs"
+  },
+  "files": [
+    "desktop/main.cjs",
+    "bundle/**/*",
+    "package.json",
+    "!node_modules/**/*"
+  ],
+  "asar": true,
+  "mac": {
+    "category": "public.app-category.entertainment",
+    "target": [
+      {
+        "target": "dmg",
+        "arch": [
+          "arm64",
+          "x64"
+        ]
+      }
+    ],
+    "identity": null,
+    "icon": "bundle/icon.png"
+  },
+  "dmg": {
+    "title": "CineGram"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "icon": "bundle/icon.png",
+    "signAndEditExecutable": false
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true
+  }
+}

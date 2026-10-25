@@ -10,4 +10,17 @@ Tg-movies/
 __pycache__/
 mint-golem-mod
 *.jar
+!apps/android/gradle/wrapper/gradle-wrapper.jar
 crawler.zip
+
+# Native application builds
+apps/node_modules/
+apps/bundle/
+apps/dist/
+apps/android/.gradle/
+apps/android/.signing/
+apps/android/local.properties
+apps/android/**/build/
+apps/android/app/src/main/assets/
+apps/android/app/src/main/res/drawable/app_icon.png
+apps/android/app/src/main/java/app/cinegram/AppConfig.java

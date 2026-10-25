@@ -66,7 +66,7 @@ struct CineGramCoreTests {
         let movie = try requireValue(JSONSerialization.jsonObject(with:detail.data) as? [String:Any])
         expectEqual(movie["title"] as? String,"Киберсталкер");expectNotNil(movie["videoSources"])
     }
-    @Test func testLocalServerServesBundledUIAndRejectsTraversal() async throws {
+    @Test func testLocalServerServesBundledUIForMovieRoutes() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at:directory.appendingPathComponent("public"),withIntermediateDirectories:true)
         try Data("<title>CineGram fixture</title>".utf8).write(to:directory.appendingPathComponent("public/index.html"))
@@ -78,6 +78,11 @@ struct CineGramCoreTests {
         defer { server.stop() }
         let (data,response) = try await URLSession.shared.data(from:URL(string:LocalServer.origin+"/movie/1254840")!)
         expectEqual((response as? HTTPURLResponse)?.statusCode,200);expectTrue(String(decoding:data,as:UTF8.self).contains("CineGram fixture"))
+    }
+    @Test func testTraversalCannotReadOutsideBundledAssets() async throws {
+        let api = CinemaAPI(resources:URL(fileURLWithPath:"/tmp"),metadataKey:"test-key",shield:"")
+        let response = await api.handle(LocalRequest(target:"/%2e%2e/private-file"))
+        expectEqual(response.status,400)
     }
     @Test func testPrivateDestinationsAreRejected() {
         for value in ["http://player.example/","https://127.0.0.1/","https://10.0.0.1/","https://localhost/","https://[::1]/"] { expectFalse(PlayerRewrite.validRemote(URL(string:value)!)) }

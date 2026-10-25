@@ -24,3 +24,11 @@ apps/android/**/build/
 apps/android/app/src/main/assets/
 apps/android/app/src/main/res/drawable/app_icon.png
 apps/android/app/src/main/java/app/cinegram/AppConfig.java
+
+# iOS generated resources and build products
+apps/ios/Core/.build/
+apps/ios/Core/.swiftpm/
+apps/ios/CineGram/Resources/
+apps/ios/CineGram/Assets.xcassets/
+apps/ios/CineGram.xcodeproj/
+apps/ios/build/

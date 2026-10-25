@@ -8,7 +8,8 @@
     "desktop": "npm run prepare:backend && electron desktop/main.cjs",
     "build:mac": "npm run prepare:backend && electron-builder --config desktop/builder.json --mac",
     "build:win": "npm run prepare:backend && electron-builder --config desktop/builder.json --win",
-    "prepare:android": "node scripts/prepare.cjs android"
+    "prepare:android": "node scripts/prepare.cjs android",
+    "prepare:ios": "node scripts/prepare-ios.cjs"
   },
   "dependencies": {
     "axios": "1.13.6",

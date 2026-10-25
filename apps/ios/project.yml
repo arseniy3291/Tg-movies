@@ -1,0 +1,55 @@
+name: CineGram
+options:
+  bundleIdPrefix: app.cinegram
+  deploymentTarget:
+    iOS: '16.0'
+packages:
+  CineGramCore:
+    path: Core
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    MARKETING_VERSION: '1.0.1'
+    CURRENT_PROJECT_VERSION: '2'
+targets:
+  CineGram:
+    type: application
+    platform: iOS
+    sources:
+      - path: CineGram
+        excludes: [Resources, Info.plist]
+      - path: CineGram/Resources
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: CineGramCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.cinegram.ios
+        INFOPLIST_FILE: CineGram/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: '1,2'
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+  CineGramUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: CineGram
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.cinegram.ios.uitests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  CineGram:
+    build:
+      targets:
+        CineGram: all
+    run:
+      config: Debug
+    test:
+      targets:
+        - CineGramUITests
+    archive:
+      config: Release

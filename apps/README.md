@@ -38,3 +38,7 @@ cd apps/android
 На Windows используется gradlew.bat. Артефакты: apps/dist и apps/android/app/build/outputs/apk/debug. Generated AppConfig использует ключ метаданных из существующего server.js; он доступен внутри клиентской сборки. При широком распространении учитывайте общий лимит этого ключа.
 
 Workflow «Build CineGram apps» запускается вручную в GitHub Actions и сохраняет сборки как artifacts. Он не публикует релизы. Для постоянного распространения Android нужен собственный сохранённый signing key: debug-ключи разных компьютеров/CI несовместимы для обновления поверх установленной версии.
+
+## iOS и iPadOS
+
+Локальный Swift-сервис и WKWebView для iOS/iPadOS 16+. [Установка через бесплатный Apple ID и сборка](ios/README.md). Команда подготовки ресурсов: `npm --prefix apps run prepare:ios`. Workflow **Build CineGram iOS** создаёт неподписанный IPA и запускает тесты в iPhone Simulator.

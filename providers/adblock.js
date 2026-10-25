@@ -65,7 +65,7 @@ function buildClientShieldScript(targetOrigin, proxyBasePath = '/api/player-prox
   }
 
   function toProxyUrl(fullUrl) {
-    return ORIGINAL_ORIGIN + PROXY_PATH + '?url=' + encodeURIComponent(fullUrl) + '&ref=' + encodeURIComponent(TARGET_ORIGIN + '/');
+    return ORIGINAL_ORIGIN + PROXY_PATH + '?url=' + encodeURIComponent(fullUrl) + '&ref=' + encodeURIComponent(TARGET_ORIGIN + '/') + '&sub=1';
   }
 
   // 3. Intercept fetch (uBlock-style network filter + same-origin proxy routing)
@@ -147,8 +147,8 @@ function cleanPlayerHtml(html, targetUrl) {
 
   // 3. Cinemar: strip preroll, midroll, vastConfig, dp_vast
   out = out.replace(/"vastConfig"\s*:\s*\{[^}]*\}/g, '"vastConfig":{"resetTime":0,"prerollCount":0,"midrollCount":0}');
-  out = out.replace(/"preroll"\s*:\s*\[[\s\S]*?\](?=,"midroll"|,"dp_vast"|\})/g, '"preroll":[]');
-  out = out.replace(/"midroll"\s*:\s*\[[\s\S]*?\](?=,"dp_vast"|\})/g, '"midroll":[]');
+  out = out.replace(/"preroll"\s*:\s*\[[\s\S]*?\](?=,"midroll")/g, '"preroll":[]');
+  out = out.replace(/"midroll"\s*:\s*\[[\s\S]*?\](?=,"dp_vast")/g, '"midroll":[]');
   out = out.replace(/"dp_vast"\s*:\s*true/g, '"dp_vast":false');
 
   // 4. NextEmbed / Collaps / VenomPlayer: strip <script data-name="ad"> and adsConfig
@@ -157,21 +157,35 @@ function cleanPlayerHtml(html, targetUrl) {
   // Prevent NextEmbed from redirecting out of the ad-free proxy frame
   out = out.replace(/if\s*\(\s*isEmbedded\s*&&\s*!sameOrigin\s*&&\s*window\.fetch/g, 'if (false && isEmbedded');
 
-  // 5. Alloha / Stravers / Allarknow: disable rmp-vast and config.ads
+  // 5. Alloha / Stravers / Allarknow: disable rmp-vast, isFramed trap, and config.ads
+  out = out.replace(/if\s*\(\s*!isFramed\s*\)/g, 'if(false)');
   out = out.replace(/<script[^>]+rmp-vast\.min\.js[^>]*><\/script>/gi, '<script>window.RmpVast=function(){};</script>');
   out = out.replace(/"ads"\s*:\s*\{"enabled"\s*:\s*true/g, '"ads":{"enabled":false');
   out = out.replace(/\\"ads\\"\s*:\s*\{\\"enabled\\"\s*:\s*true/g, '\\"ads\\":{\\"enabled\\":false');
   out = out.replace(/"\[count_preroll\]"\s*:\s*\d+/g, '"[count_preroll]":0');
   out = out.replace(/"\[count_midroll\]"\s*:\s*\d+/g, '"[count_midroll]":0');
 
-  // 6. Rewrite root-relative asset paths (/assets/..., /build/..., ./js/...) to go through our proxy
-  out = out.replace(/(src|href)=["'](\/(?:assets|build)\/[^"']+)["']/gi, (_, attr, relPath) => {
-    const full = origin + relPath;
-    return `${attr}="/api/player-proxy?url=${encodeURIComponent(full)}&ref=${encodeURIComponent(origin + '/')}"`;
+  // 6. Rewrite relative and protocol-relative asset paths ONLY inside <script> and <link> opening tags
+  out = out.replace(/<(script|link)\b[^>]*>/gi, (tag) => {
+    return tag.replace(/\b(src|href)=["']([^"']+)["']/gi, (attrMatch, attr, val) => {
+      if (val.startsWith('/api/player-proxy') || val.startsWith('data:') || val.startsWith('blob:') || val.startsWith('#')) {
+        return attrMatch;
+      }
+      let full = null;
+      if (val.startsWith('//')) {
+        full = 'https:' + val;
+      } else if (val.startsWith('/')) {
+        full = origin + val;
+      } else if (val.startsWith('./')) {
+        full = new URL(val, targetUrl).href;
+      }
+      if (!full) return attrMatch;
+      return `${attr}="/api/player-proxy?url=${encodeURIComponent(full)}&ref=${encodeURIComponent(origin + '/')}&sub=1"`;
+    });
   });
 
-  // 7. Inject <base> and the uBlock Client Shield at the very top of <head>
-  const injection = `<base href="${origin}/">` + buildClientShieldScript(origin);
+  // 7. Inject the uBlock Client Shield at the very top of <head> (NO <base> tag so /api/player-proxy resolves to our server!)
+  const injection = buildClientShieldScript(origin);
   if (/<head[^>]*>/i.test(out)) {
     out = out.replace(/<head[^>]*>/i, match => match + injection);
   } else {
@@ -205,15 +219,17 @@ async function handlePlayerProxy(req, res) {
 
   try {
     const method = req.method === 'POST' ? 'POST' : 'GET';
+    const isSub = req.query.sub === '1';
+    const effectiveRef = isSub ? (parsed.origin + '/') : ref;
     const headers = {
       'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
       'Accept': req.headers['accept'] || '*/*',
       'Accept-Language': 'ru,en;q=0.8',
-      'Referer': ref,
-      'Origin': new URL(ref).origin
+      'Referer': effectiveRef,
+      'Origin': new URL(effectiveRef).origin
     };
-    if (req.headers['content-type']) {
-      headers['Content-Type'] = req.headers['content-type'];
+    for (const h of ['content-type', 'accepts-block', 'x-requested-with', 'range']) {
+      if (req.headers[h]) headers[h] = req.headers[h];
     }
 
     const response = await axios({
@@ -236,6 +252,17 @@ async function handlePlayerProxy(req, res) {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
       return res.status(response.status).send(cleaned);
+    }
+
+    if (/text\/css/i.test(contentType)) {
+      let css = Buffer.from(response.data).toString('utf8');
+      css = css.replace(/url\(\s*(['"]?)(\/(?!\/|api\/player-proxy)[^)'"]+)\1\s*\)/gi, (_, q, relPath) => {
+        const full = parsed.origin + relPath;
+        return `url(${q}/api/player-proxy?url=${encodeURIComponent(full)}&ref=${encodeURIComponent(parsed.origin + '/')}&sub=1${q})`;
+      });
+      res.setHeader('Content-Type', 'text/css; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      return res.status(response.status).send(css);
     }
 
     res.setHeader('Content-Type', contentType);

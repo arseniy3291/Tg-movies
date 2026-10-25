@@ -266,8 +266,19 @@ async function resolveSources({ title = '', originalTitle = '', year = '' } = {}
   ]);
 
   const combined = [...(kng.sources || []), ...(hdr.sources || [])];
-  // Put full players first, trailers last
-  combined.sort((a, b) => Number(Boolean(a.trailer)) - Number(Boolean(b.trailer)));
+  const playerOrder = [
+    'Kinogo · Плеер 2',
+    'HDRezka · Плеер 3',
+    'Kinogo · Смотреть онлайн',
+    'HDRezka · Смотреть онлайн',
+    'HDRezka · Плеер 1'
+  ];
+  const priority = source => {
+    if (source.trailer) return playerOrder.length + 1;
+    const index = playerOrder.indexOf(source.name);
+    return index === -1 ? playerOrder.length : index;
+  };
+  combined.sort((a, b) => priority(a) - priority(b));
 
   return {
     sources: combined,

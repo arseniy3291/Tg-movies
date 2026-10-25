@@ -1158,7 +1158,11 @@ async function launchKinobox() {
     const res = await api(`/api/video-sources?${params.toString()}`, false);
     if (request !== playerRequest || State.currentMovie?.id !== movie.id) return;
 
-    const sources = res.sources || [];
+    let playerNumber = 0;
+    const sources = (res.sources || []).map(source => ({
+      ...source,
+      name: source.trailer ? 'Трейлер' : `Плеер ${++playerNumber}`
+    }));
     const buttons = [];
 
     const select = (source, index) => {

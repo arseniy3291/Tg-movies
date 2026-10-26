@@ -15,7 +15,8 @@ const root = path.resolve(__dirname, '../..');
   await esbuild.build({ entryPoints: [path.join(root, 'providers/adblock.js')], outfile: helper,
     bundle: true, platform: 'node', target: 'node22', format: 'cjs', nodePaths: [path.join(root, 'apps/node_modules')] });
   const { buildClientShieldScript } = require(helper);
-  await fs.writeFile(path.join(resources, 'shield.html'), buildClientShieldScript('https://cinegram-origin.invalid/__SOURCE__'));
+  const mediaBridge = await fs.readFile(path.join(root, 'apps/ios/Support/native-media.js'), 'utf8');
+  await fs.writeFile(path.join(resources, 'shield.html'), buildClientShieldScript('https://cinegram-origin.invalid/__SOURCE__') + '<script data-name="cinegram-native-media">' + mediaBridge + '</script>');
   await fs.rm(helper);
   const source = await fs.readFile(path.join(root, 'server.js'), 'utf8');
   const key = source.match(/const KP_KEY = '([^']+)'/)[1];

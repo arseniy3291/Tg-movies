@@ -16,6 +16,7 @@ jobs:
           cache-dependency-path: apps/package-lock.json
       - run: npm ci --prefix apps
       - run: npm --prefix apps run prepare:ios
+      - run: node --test tests/ios-media.test.js
       - name: Test native local API and media rewriting
         run: swift test --package-path apps/ios/Core --jobs 4
       - name: Generate Xcode project

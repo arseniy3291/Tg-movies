@@ -33,7 +33,8 @@ jobs:
         run: |
           plutil -p build/device/Build/Products/Release-iphoneos/CineGram.app/Info.plist
           test "$(plutil -extract CFBundleIdentifier raw build/device/Build/Products/Release-iphoneos/CineGram.app/Info.plist)" = 'app.cinegram.ios'
-          test -f build/device/Build/Products/Release-iphoneos/CineGram.app/Resources/public/index.html
+          test -f build/device/Build/Products/Release-iphoneos/CineGram.app/WebAssets/public/index.html
+          test ! -d build/device/Build/Products/Release-iphoneos/CineGram.app/Resources
           mkdir -p build/package/Payload
           cp -R build/device/Build/Products/Release-iphoneos/CineGram.app build/package/Payload/
           cd build/package

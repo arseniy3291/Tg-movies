@@ -6,7 +6,9 @@ const sharp = require('sharp');
 const root = path.resolve(__dirname, '../..');
 (async () => {
   const app = path.join(root, 'apps/ios/CineGram');
-  const resources = path.join(app, 'Resources');
+  const resources = path.join(app, 'WebAssets');
+  // Resources is reserved by Apple's iOS bundle layout.
+  await fs.rm(path.join(app, 'Resources'), { recursive: true, force: true });
   await fs.mkdir(resources, { recursive: true });
   await fs.cp(path.join(root, 'public'), path.join(resources, 'public'), { recursive: true });
   const helper = path.join(root, 'apps/bundle/ios-shield-helper.cjs');

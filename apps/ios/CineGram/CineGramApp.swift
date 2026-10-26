@@ -28,7 +28,7 @@ struct CineGramApp: App {
     func start() {
         started = true;error = nil;ready = false;server?.stop()
         do {
-            guard let resources = Bundle.main.url(forResource:"Resources",withExtension:nil) else { throw CocoaError(.fileNoSuchFile) }
+            guard let resources = Bundle.main.url(forResource:"WebAssets",withExtension:nil) else { throw CocoaError(.fileNoSuchFile) }
             let config = try JSONSerialization.jsonObject(with:Data(contentsOf:resources.appendingPathComponent("config.json"))) as? [String:String]
             guard let key = config?["metadataKey"],!key.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
             let shield = try String(contentsOf:resources.appendingPathComponent("shield.html"),encoding:.utf8)
